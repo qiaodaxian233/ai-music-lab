@@ -1,5 +1,60 @@
 # CHANGELOG
 
+## v0.3.0 — Song → Reaper 工程导出 (2026-05-12)
+
+新增"AI 歌 → 真人创作工程文件"完整流水线。让你的作品有工程文件作为创作证据,
+配合你的电容麦录人声 = 实质性人类创作贡献,摆脱 AI 标签。
+
+### 🎹 完整流水线 (`scripts/song-to-daw.py`, 端口 7863)
+
+输入 `outputs/` 里一首 AI 生成的歌,自动产出 Reaper 工程目录:
+
+```
+outputs/projects/<工程名>/
+├── <工程名>.rpp                       ← Reaper 工程文件(双击打开)
+├── README.txt                         ← BPM / 段落 / 操作指南
+└── stems/
+    ├── 01_vocals_AI_reference.wav     ← AI 人声(工程里默认 mute)
+    ├── 02_drums.wav + 02_drums.mid    ← 鼓 stem + MIDI
+    ├── 03_bass.wav + 03_bass.mid      ← 贝斯 stem + MIDI
+    ├── 04_guitar.wav                  ← 吉他(无 MIDI,多声部转录不支持)
+    ├── 05_piano.wav + 05_piano.mid    ← 钢琴 stem + MIDI
+    └── 06_other.wav                   ← pads/strings/etc
+```
+
+工程内含 10 个预配置轨:
+- 6 个音频 stem 轨
+- 3 个 MIDI 备选轨(默认 mute,启用后接虚拟乐器换音色)
+- **1 个空待录轨(已 arm record,你的人声)**
+- 段落 marker(intro/verse/chorus/bridge/outro 自动检测)
+- 项目 BPM 设到检测到的值
+
+### 🔧 新增模块
+
+- `lib/stem_separation.py` — Demucs htdemucs_6s 6-stem 分离封装
+- `lib/audio_to_midi.py` — Basic Pitch (钢琴/贝斯) + librosa 鼓 onset 检测
+- `lib/reaper_project.py` — `.rpp` 文件生成器,**MIDI 事件直接嵌入工程文件**
+  (不用用户额外导入 .mid 文件), 支持 marker / 颜色 / 待录状态 / mute
+- `scripts/song-to-daw.py` — Gradio UI 端口 7863
+- `scripts/launch-daw-export.sh` — 启动脚本
+
+### 📦 新依赖
+
+- `demucs>=4.0` — 6-stem 分离(首次下载 htdemucs_6s 模型 ~5GB)
+- `basic-pitch>=0.4` — Spotify 开源 audio-to-MIDI(钢琴/贝斯效果好)
+- `pretty_midi>=0.2` — MIDI 读写
+
+### ⚠️ 已知局限(诚实说)
+
+- **吉他不转 MIDI**:多声部和弦转录是音乐 AI 没解决的难题,留音频
+- **鼓 MIDI 看歌**:简单 4/4 流行鼓 80% 准;复杂打击乐 / trap hi-hat / jazz feel 抓不准
+- **不预装 plugin 链**:Reaper plugin 参数格式跟版本绑定,稳定性差。
+  用户用 Reaper 自带的 ReaEQ/ReaComp/ReaSamplOmatic5000,30 秒手动加完
+- **段落 marker 经验型命名**:agglomerative 切段挺准,但 "Verse/Chorus" 名字是按
+  流行歌经验起的,不保证一一对应。Reaper 里随时改名
+
+---
+
 ## v0.2.0 — 历史索引 + 自动后处理 + LoRA wizard (2026-05-12)
 
 三大件:

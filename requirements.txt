@@ -12,3 +12,8 @@ watchdog>=4.0
 # LoRA wizard 音频分析(BPM/key 检测)
 librosa>=0.10
 soundfile>=0.12
+
+# Song → DAW Export (v0.3.0)
+demucs>=4.0            # 6-stem 分离 (htdemucs_6s, ~5GB 模型自动下载)
+basic-pitch>=0.4       # Spotify audio-to-MIDI (钢琴/贝斯)
+pretty_midi>=0.2       # MIDI 文件读写

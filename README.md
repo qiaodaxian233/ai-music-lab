@@ -24,9 +24,10 @@ bash scripts/launch-ui.sh
 | ACE-Step 主 UI | 7860 | `bash scripts/launch-ui.sh` | 生成 / LoRA 训练 |
 | 📚 历史浏览器 | 7861 | `bash scripts/launch-history.sh` | 搜/标/听/删 历史生成 |
 | 🎓 LoRA 数据 wizard | 7862 | `bash scripts/launch-lora-wizard.sh` | 分析参考音频,准备训练集 |
+| 🎹 Song → DAW Export | 7863 | `bash scripts/launch-daw-export.sh` | 拆 stem + 转 MIDI + 生成 Reaper 工程 |
 | 🔄 后处理 watcher | (无 UI) | `bash scripts/launch-postprocess.sh` | 自动归一化新生成的歌 |
 
-四个可以同时开,互不打扰。
+五个可以同时开,互不打扰。
 
 ## 硬件要求
 
@@ -40,23 +41,29 @@ bash scripts/launch-ui.sh
 ai-music-lab/
 ├── ACE-Step-1.5/       ← setup.sh 自动 clone,不在 git 里
 ├── lib/                ← 核心 Python 库
-│   ├── history.py      ← 历史索引
-│   ├── postprocess.py  ← 响度归一化 / tag / 转码
-│   └── training_data.py← LoRA 数据集分析与准备
+│   ├── history.py            ← 历史索引
+│   ├── postprocess.py        ← 响度归一化 / tag / 转码
+│   ├── training_data.py      ← LoRA 数据集分析与准备
+│   ├── stem_separation.py    ← Demucs 6-stem 分离 (v0.3.0)
+│   ├── audio_to_midi.py      ← Basic Pitch + 鼓 onset 检测 (v0.3.0)
+│   └── reaper_project.py     ← Reaper .rpp 工程生成器 (v0.3.0)
 ├── scripts/            ← 启动 / 后处理脚本
 │   ├── launch-ui.sh           ← ACE-Step 主 UI
 │   ├── launch-history.sh      ← 历史浏览器 UI
 │   ├── launch-lora-wizard.sh  ← LoRA 数据 wizard UI
+│   ├── launch-daw-export.sh   ← Song → DAW Export UI (v0.3.0)
 │   ├── launch-postprocess.sh  ← 后处理 watcher
-│   ├── history-ui.py          ← Gradio 历史浏览器
-│   ├── auto-postprocess.py    ← watcher 主程序
-│   ├── lora-wizard.py         ← Gradio LoRA 数据 UI
-│   ├── normalize.sh           ← 单文件归一化
-│   └── batch-normalize.sh     ← 批量归一化
+│   ├── history-ui.py
+│   ├── lora-wizard.py
+│   ├── song-to-daw.py         ← (v0.3.0)
+│   ├── auto-postprocess.py
+│   ├── normalize.sh
+│   └── batch-normalize.sh
 ├── prompts/            ← 风格 tag 库 / 歌词模板
 ├── loras/              ← 训练好的 LoRA(权重 gitignore)
-├── datasets/           ← LoRA 训练数据(gitignore,音频太大)
+├── datasets/           ← LoRA 训练数据(gitignore)
 └── outputs/            ← 生成的音频(gitignore)
+    └── projects/       ← DAW 工程导出 (v0.3.0, gitignore)
 ```
 
 ## 常用工作流
@@ -100,6 +107,29 @@ bash scripts/launch-lora-wizard.sh
 # 6. 切到 ACE-Step 主 UI 的 "LoRA Training" 标签
 #    数据集路径填: datasets/my-chinese-folk/
 #    → 一键训练
+```
+
+### 摆脱 AI 标签:导出真实创作工程
+
+```bash
+# 1. 启动 Song → DAW Export
+bash scripts/launch-daw-export.sh
+# 浏览器 http://localhost:7863
+
+# 2. 选 outputs/ 里满意的一首歌,勾上"生成 MIDI",点处理
+#    → 5-15 分钟后产出 outputs/projects/<歌名>/<歌名>.rpp
+
+# 3. 装 Reaper(reaper.fm,试用永久),双击 .rpp 打开
+
+# 4. 工程里 ★ 07 YOUR VOCAL 轨已自动 arm record
+#    → 戴耳机,按播放,跟着 AI 人声轨录你自己的人声
+#    → 录几个 take 拼最好
+
+# 5. 想换鼓/贝斯/钢琴音色?
+#    → mute 02/03/05 Audio 轨,unmute 02b/03b/05b MIDI 轨
+#    → 给 MIDI 轨加虚拟乐器(ReaSamplOmatic5000 / Spitfire LABS 等)
+
+# 6. 调音量,File → Render 导出 → 这是一首真实有你创作的歌
 ```
 
 ### 手动后处理(如果没开 watcher)
