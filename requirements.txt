@@ -1,0 +1,6 @@
+# ai-music-lab 辅助工具的依赖
+# (ACE-Step 自己的依赖由 setup.sh 通过 pip install -e . 装)
+pyyaml>=6.0
+mutagen>=1.47       # ID3 / metadata tagging
+pandas>=2.0         # batch CSV processing
+rich>=13.0          # nice CLI output

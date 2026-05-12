@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# ACE-Step (cloned by setup.sh, not part of this repo)
+ACE-Step-1.5/
+
+# Generated audio (private, large)
+outputs/*
+!outputs/.gitkeep
+!outputs/README.md
+
+# LoRA weights (large, but configs go in)
+loras/*.safetensors
+loras/*.bin
+loras/*.pt
+loras/*.ckpt
+!loras/.gitkeep
+!loras/README.md
+
+# Training datasets (audio files too large)
+datasets/
+
+# Local config overrides
+.env
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~

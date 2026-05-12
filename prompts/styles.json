@@ -1,0 +1,67 @@
+{
+  "_comment": "风格 tag 预设库 — 试出来效果好的组合可以加进 presets。tags-by-category 是积木块,自由组合。",
+
+  "presets": {
+    "indie-folk-female":     "indie folk, female vocal, acoustic guitar, soft drums, intimate, warm reverb, 90 bpm",
+    "indie-folk-male":       "indie folk, male vocal, fingerpicked acoustic guitar, brush drums, melancholic, 85 bpm",
+    "synthwave-80s":         "synthwave, 80s retro, instrumental, gated reverb drums, bright analog synth lead, driving bass, 120 bpm",
+    "lofi-hiphop":           "lofi hip hop, instrumental, mellow piano, vinyl crackle, jazzy chords, laid back, 75 bpm",
+    "pop-rock-anthem":       "pop rock, male vocal, distorted electric guitar, anthemic chorus, big drums, energetic, 130 bpm",
+    "ambient-cinematic":     "ambient cinematic, instrumental, slow strings, swelling pads, ethereal, atmospheric, 60 bpm",
+    "chinese-ballad":        "chinese ballad, female vocal, piano, strings, emotional, melancholic, slow, 70 bpm",
+    "edm-festival":          "edm big room, instrumental, four-on-the-floor kick, supersaw lead, festival drop, 128 bpm",
+    "country-acoustic":      "country, male vocal, acoustic guitar, banjo, harmonica, warm storytelling, 100 bpm",
+    "kpop-girl-group":       "kpop, female vocal group, polished modern pop, catchy hook, electronic elements, 120 bpm",
+    "jazz-trio":             "jazz trio, instrumental, walking upright bass, brush drums, piano improvisation, swing, 110 bpm",
+    "rnb-slow-jam":          "r&b slow jam, male vocal, electric piano, soulful, smooth bass, sensual, 70 bpm",
+    "punk-rock":             "punk rock, male vocal, distorted guitars, aggressive drums, fast, raw, 160 bpm",
+    "trap-instrumental":     "trap, instrumental, 808 sub bass, hi-hat rolls, dark synth lead, aggressive, 140 bpm",
+    "bossa-nova":            "bossa nova, female vocal portuguese, nylon guitar, brush drums, soft, romantic, 95 bpm"
+  },
+
+  "tags-by-category": {
+    "vocal": [
+      "female vocal", "male vocal", "vocal group", "vocal harmonies",
+      "spoken word", "rap vocal", "instrumental", "no vocals"
+    ],
+    "energy": [
+      "chill", "mellow", "uplifting", "energetic", "intense", "aggressive",
+      "melancholic", "dreamy", "playful", "dramatic", "tense", "peaceful"
+    ],
+    "production": [
+      "lofi", "polished", "raw", "compressed", "spacious", "intimate",
+      "wide stereo", "mono", "vintage", "modern", "warm", "bright"
+    ],
+    "drums": [
+      "gated reverb drums", "punchy drums", "brush drums", "trap drums",
+      "four-on-the-floor", "breakbeat", "808 drums", "live drums",
+      "drum machine", "no drums"
+    ],
+    "bass": [
+      "808 sub bass", "walking upright bass", "slap bass", "synth bass",
+      "fingerpicked bass", "distorted bass"
+    ],
+    "instruments": [
+      "acoustic guitar", "fingerpicked acoustic guitar", "electric guitar",
+      "distorted electric guitar", "piano", "electric piano", "synth pad",
+      "supersaw lead", "strings", "horns", "banjo", "harmonica",
+      "nylon guitar", "violin", "accordion"
+    ],
+    "tempo": [
+      "60 bpm", "70 bpm", "85 bpm", "90 bpm", "100 bpm", "110 bpm",
+      "120 bpm", "128 bpm", "140 bpm", "160 bpm"
+    ],
+    "language-hint": [
+      "english lyrics", "chinese lyrics mandarin", "japanese lyrics",
+      "korean lyrics", "portuguese lyrics", "spanish lyrics"
+    ]
+  },
+
+  "_writing_tips": [
+    "顺序: 大类型 → 人声 → 主要乐器 → 情绪 → BPM",
+    "例如: 'indie folk, female vocal, acoustic guitar, intimate, 90 bpm'",
+    "BPM 模型有响应,慢歌 60-80,中等 90-110,快歌 120-140,极快 150+",
+    "中文歌词加 'chinese lyrics mandarin' 提示更准",
+    "试出好组合就加进 presets,自己攒一个私人词典"
+  ]
+}
