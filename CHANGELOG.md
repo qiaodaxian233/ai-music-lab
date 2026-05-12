@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## v0.3.1 — Windows 启动器 + 行尾规范 (2026-05-12)
+
+修复 Windows 用户 `git clone` 后 `.sh` 文件被 Git 自动转 CRLF 导致 bash 跑不动的问题
+(`$'\r': command not found` / `syntax error: unexpected end of file`)。
+
+### 新增
+
+- **5 个 Windows `.bat` 启动器** (双击运行,自带 12GB VRAM 优化参数):
+  - `start-ui.bat` (7860) — ACE-Step 主 UI
+  - `start-history.bat` (7861) — 历史浏览器
+  - `start-lora-wizard.bat` (7862) — LoRA wizard
+  - `start-daw-export.bat` (7863) — Song → DAW Export
+  - `start-postprocess.bat` — 后处理 watcher
+- **`.gitattributes`** 锁定行尾规范:
+  - `.sh` / `.py` / `.md` / `.json` → LF
+  - `.bat` / `.cmd` → CRLF
+  - 音频 / 模型权重 → binary
+
+### 文档
+
+- README.md 加 Windows 启动一节, 工具表分两套
+
+### 后续 Windows 用户须知
+
+如果你已经 `git pull` 拿过仓库, `.sh` 文件可能还是 CRLF, 跑一次:
+
+```bash
+sed -i 's/\r$//' setup.sh scripts/*.sh
+```
+
+之后再 pull 不会再坏(`.gitattributes` 接管了)。
+
+---
+
 ## v0.3.0 — Song → Reaper 工程导出 (2026-05-12)
 
 新增"AI 歌 → 真人创作工程文件"完整流水线。让你的作品有工程文件作为创作证据,

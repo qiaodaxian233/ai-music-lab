@@ -6,6 +6,8 @@
 
 ## 快速开始
 
+### Linux / Mac / WSL
+
 ```bash
 # 一键安装(自动 clone ACE-Step + 建 venv + 装依赖)
 bash setup.sh
@@ -17,17 +19,36 @@ source .venv/bin/activate
 bash scripts/launch-ui.sh
 ```
 
-## 三个独立小工具(端口分开,按需启动)
+### Windows
 
-| 工具 | 端口 | 启动命令 | 作用 |
-|---|---|---|---|
-| ACE-Step 主 UI | 7860 | `bash scripts/launch-ui.sh` | 生成 / LoRA 训练 |
-| 📚 历史浏览器 | 7861 | `bash scripts/launch-history.sh` | 搜/标/听/删 历史生成 |
-| 🎓 LoRA 数据 wizard | 7862 | `bash scripts/launch-lora-wizard.sh` | 分析参考音频,准备训练集 |
-| 🎹 Song → DAW Export | 7863 | `bash scripts/launch-daw-export.sh` | 拆 stem + 转 MIDI + 生成 Reaper 工程 |
-| 🔄 后处理 watcher | (无 UI) | `bash scripts/launch-postprocess.sh` | 自动归一化新生成的歌 |
+**第 1 次** 在 Git Bash 里跑 `setup.sh` 建环境(cmd 跑不了 .sh):
 
-五个可以同时开,互不打扰。
+```bash
+cd /e/path/to/ai-music-lab
+bash setup.sh
+```
+
+**之后日常** 直接在资源管理器里**双击 .bat**启动:
+
+| 双击文件 | 端口 | 作用 |
+|---|---|---|
+| `start-ui.bat` | 7860 | ACE-Step 主 UI(已带 12GB VRAM 优化参数) |
+| `start-history.bat` | 7861 | 历史浏览器 |
+| `start-lora-wizard.bat` | 7862 | LoRA 训练数据 wizard |
+| `start-daw-export.bat` | 7863 | Song → Reaper 工程导出 |
+| `start-postprocess.bat` | (无 UI) | 自动归一化 watcher |
+
+可以同时双击多个,互不打扰。关窗口即停服务。
+
+## 各工具一览
+
+| 工具 | 端口 | Linux / Mac | Windows | 作用 |
+|---|---|---|---|---|
+| ACE-Step 主 UI | 7860 | `bash scripts/launch-ui.sh` | `start-ui.bat` | 生成 / LoRA 训练 |
+| 📚 历史浏览器 | 7861 | `bash scripts/launch-history.sh` | `start-history.bat` | 搜/标/听/删 历史生成 |
+| 🎓 LoRA 数据 wizard | 7862 | `bash scripts/launch-lora-wizard.sh` | `start-lora-wizard.bat` | 分析参考音频,准备训练集 |
+| 🎹 Song → DAW Export | 7863 | `bash scripts/launch-daw-export.sh` | `start-daw-export.bat` | 拆 stem + 转 MIDI + 生成 Reaper 工程 |
+| 🔄 后处理 watcher | (无 UI) | `bash scripts/launch-postprocess.sh` | `start-postprocess.bat` | 自动归一化新生成的歌 |
 
 ## 硬件要求
 

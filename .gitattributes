@@ -1,0 +1,44 @@
+# 默认: 所有文本文件用 LF, git 自动检测二进制
+* text=auto eol=lf
+
+# Shell 脚本必须 LF (Windows Git Bash 读 CRLF 会爆炸)
+*.sh         text eol=lf
+*.bash       text eol=lf
+
+# Python 用 LF (跨平台习惯)
+*.py         text eol=lf
+
+# Windows 批处理必须 CRLF (cmd.exe 读 LF 会出问题)
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+
+# Markdown / 配置 用 LF
+*.md         text eol=lf
+*.json       text eol=lf
+*.yaml       text eol=lf
+*.yml        text eol=lf
+*.toml       text eol=lf
+*.txt        text eol=lf
+*.csv        text eol=lf
+
+# 二进制不动
+*.wav        binary
+*.mp3        binary
+*.flac       binary
+*.ogg        binary
+*.m4a        binary
+*.mid        binary
+*.midi       binary
+*.rpp        binary
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.gif        binary
+*.pdf        binary
+*.zip        binary
+*.tar        binary
+*.gz         binary
+*.safetensors binary
+*.ckpt       binary
+*.pt         binary
+*.pth        binary
