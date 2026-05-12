@@ -1,5 +1,50 @@
 # CHANGELOG
 
+## v0.4.0 — 统一控制台 + .bat 启动器精简 (2026-05-12)
+
+把 4 个独立 UI 合并到一个统一控制台,联动 + 单端口 + 单窗口。
+
+### 🎵 新增
+
+- **`scripts/unified-ui.py`** (端口 7861, 690 行) — 统一控制台,4 个 Tab:
+  - 📚 历史浏览器
+  - 🎓 LoRA 训练数据
+  - 🎹 Song → DAW Export
+  - 🔄 后处理控制 (含 watcher 启停)
+- **`start-lab.bat`** — 启动统一控制台
+- **跨 Tab 联动**:
+  - 历史 Tab 选一首歌 → 全局 `gr.State` 共享
+  - DAW Tab 「⬅ 用历史 Tab 选中的歌」按钮 → 一键预填
+  - 后处理 Tab 「🔧 立即后处理选中的歌」按钮 → 对选中的歌跑一次
+
+### 🔧 修复
+
+- **`start-ui.bat`** 重写: 之前错误写了 `python app.py`, 实际 ACE-Step-1.5
+  的入口不是 app.py. 新版**直接调用 ACE-Step 自带的 `start_gradio_ui.bat`**,
+  让 ACE-Step 官方启动器接管 venv/依赖/参数, 跨版本不会再坏.
+
+### 🗑 删除 (功能已被统一控制台取代)
+
+- `start-history.bat`
+- `start-lora-wizard.bat`
+- `start-daw-export.bat`
+- `start-postprocess.bat`
+
+但 `scripts/{history-ui,lora-wizard,song-to-daw,auto-postprocess}.py` **保留**,
+高级用户可单独启动:
+```bash
+python scripts/history-ui.py     # :7861
+python scripts/lora-wizard.py    # :7862
+python scripts/song-to-daw.py    # :7863
+```
+
+### 📝 文档
+
+- README.md: Windows 启动一节重写,主推 2-bat (start-ui + start-lab)
+- 项目对接记忆.md: 同步
+
+---
+
 ## v0.3.1 — Windows 启动器 + 行尾规范 (2026-05-12)
 
 修复 Windows 用户 `git clone` 后 `.sh` 文件被 Git 自动转 CRLF 导致 bash 跑不动的问题

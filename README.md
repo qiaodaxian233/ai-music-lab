@@ -6,6 +6,26 @@
 
 ## 快速开始
 
+### Windows(推荐)
+
+只需要 **2 个 .bat**:
+
+| 双击文件 | 端口 | 作用 |
+|---|---|---|
+| `start-ui.bat` | 7860 | ACE-Step 主 UI(生成新歌, 调 ACE-Step 自带的官方启动器) |
+| `start-lab.bat` | 7861 | **统一控制台**(4 个 Tab: 历史 / LoRA / DAW 导出 / 后处理) |
+
+两个可以同时开,互不打扰。
+
+**第 1 次**还需要 Git Bash 跑 `bash setup.sh` 建环境(cmd 跑不了 .sh):
+
+```bash
+cd /e/path/to/ai-music-lab
+bash setup.sh
+```
+
+setup.sh 会自动 clone ACE-Step、建 venv、装依赖。
+
 ### Linux / Mac / WSL
 
 ```bash
@@ -15,40 +35,35 @@ bash setup.sh
 # 激活环境
 source .venv/bin/activate
 
-# 启动 ACE-Step 主 UI(http://localhost:7860)
-bash scripts/launch-ui.sh
+# ACE-Step 主 UI(http://localhost:7860, 用 ACE-Step 自带的官方启动器)
+cd ACE-Step-1.5 && bash start_gradio_ui.sh && cd ..
+
+# 统一控制台 UI(http://localhost:7861, 4 个 Tab)
+python scripts/unified-ui.py
 ```
 
-### Windows
+## 统一控制台都有啥
 
-**第 1 次** 在 Git Bash 里跑 `setup.sh` 建环境(cmd 跑不了 .sh):
+| Tab | 干啥 | 联动 |
+|---|---|---|
+| 📚 历史浏览器 | 搜/听/标/评/删历史生成的歌 | 选一首歌 → 全 UI 共享 |
+| 🎓 LoRA 训练数据 | 分析参考音频 → caption → metadata.csv | 配合 ACE-Step UI 的 LoRA Training 标签 |
+| 🎹 Song → DAW Export | 拆 stem + 转 MIDI + 生成 Reaper 工程 | 一键「用历史 Tab 选中的歌」 |
+| 🔄 后处理控制 | watcher 启停 + 手动跑后处理 | 一键「立即后处理选中的歌」 |
+
+ACE-Step 主 UI 不在控制台里,因为那是 ACE-Step 自己的 Gradio,跑在另一个端口。
+控制台顶部有跳转链接。
+
+## 单独启动某个工具(高级)
+
+如果不想跑整个控制台,只想开一个工具:
 
 ```bash
-cd /e/path/to/ai-music-lab
-bash setup.sh
+python scripts/history-ui.py      # 只开历史浏览器 :7861
+python scripts/lora-wizard.py     # 只开 LoRA wizard :7862
+python scripts/song-to-daw.py     # 只开 DAW Export :7863
+python scripts/auto-postprocess.py  # 只跑后处理 daemon
 ```
-
-**之后日常** 直接在资源管理器里**双击 .bat**启动:
-
-| 双击文件 | 端口 | 作用 |
-|---|---|---|
-| `start-ui.bat` | 7860 | ACE-Step 主 UI(已带 12GB VRAM 优化参数) |
-| `start-history.bat` | 7861 | 历史浏览器 |
-| `start-lora-wizard.bat` | 7862 | LoRA 训练数据 wizard |
-| `start-daw-export.bat` | 7863 | Song → Reaper 工程导出 |
-| `start-postprocess.bat` | (无 UI) | 自动归一化 watcher |
-
-可以同时双击多个,互不打扰。关窗口即停服务。
-
-## 各工具一览
-
-| 工具 | 端口 | Linux / Mac | Windows | 作用 |
-|---|---|---|---|---|
-| ACE-Step 主 UI | 7860 | `bash scripts/launch-ui.sh` | `start-ui.bat` | 生成 / LoRA 训练 |
-| 📚 历史浏览器 | 7861 | `bash scripts/launch-history.sh` | `start-history.bat` | 搜/标/听/删 历史生成 |
-| 🎓 LoRA 数据 wizard | 7862 | `bash scripts/launch-lora-wizard.sh` | `start-lora-wizard.bat` | 分析参考音频,准备训练集 |
-| 🎹 Song → DAW Export | 7863 | `bash scripts/launch-daw-export.sh` | `start-daw-export.bat` | 拆 stem + 转 MIDI + 生成 Reaper 工程 |
-| 🔄 后处理 watcher | (无 UI) | `bash scripts/launch-postprocess.sh` | `start-postprocess.bat` | 自动归一化新生成的歌 |
 
 ## 硬件要求
 
