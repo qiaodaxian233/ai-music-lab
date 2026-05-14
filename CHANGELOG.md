@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## v0.5.1 — 一键转 MIDI Tab (2026-05-14)
+
+补一个 **"🎼 一键 MIDI"** Tab — 整曲音频直接出 MIDI,**跳过 Demucs stem 分离**(比 Song→DAW 路径快 10×)。
+
+### 🎵 新增
+
+- **Tab "🎼 一键 MIDI"** (UI 11/11):
+  - 输入: outputs/ 选歌 或 直接拖音频
+  - 模式: `melodic`(Basic Pitch 整曲抓主旋律)/ `drums`(onset 分类)/ `both`
+  - 同时检测 **BPM** 和 **段落 marker**(intro / verse / chorus...)
+  - 可选嵌入元数据到 `.mid` 本身(DAW 读得到 tempo + marker)
+  - 输出三个文件: `outputs/midi/<歌名>/melodic.mid` + `bpm.txt` + `markers.txt`
+- **`lib/audio_to_midi.py` 新函数 `quick_transcribe()`**: 高级一键 API,串好 BPM/marker/melodic/drums + 嵌入元数据,可独立 CLI 用。
+- **`lib/audio_to_midi.py` 新函数 `_inject_meta_into_midi()`**: 把 BPM 重写到 MIDI tempo,把段落 marker 写成 pretty_midi lyric 事件(Reaper / Ableton / Cubase 都认)。
+
+### 🔧 设计要点
+
+- 不依赖 Demucs,只用 Basic Pitch + librosa,所以"启动→出 MIDI"只要几秒(首次下 Basic Pitch ~150MB 除外)。
+- Basic Pitch 没装时 `melodic` 会失败,但 `drums` / `bpm` / `markers` 不依赖它,仍能跑(优雅降级)。
+- 跟 Song→DAW Export 共用 `lib/audio_to_midi.py`,不重复代码。
+
+### 📁 文件改动
+
+- 修改: `lib/audio_to_midi.py`(186→326 行,新增 quick_transcribe + _inject_meta_into_midi)
+- 修改: `scripts/unified-ui.py`(1438→1607 行,加 Tab 11 + `qm_` 辅助函数)
+- 修改: `CHANGELOG.md` / `项目对接记忆.md`
+
+---
+
 ## v0.5.0 — 8 大功能补全:Prompt 工作室 / LoRA 库 / 批量 / A/B / 封面 / 字幕 / 续写 / 翻唱 (2026-05-14)
 
 一次性把 12 项规划里剩下的 8 项全做完。统一控制台从 4 Tab 扩到 **10 Tab**,

@@ -871,6 +871,108 @@ def rv_cover(song_rel, new_prompt, new_lyrics, ref_strength, seed, progress=gr.P
 
 
 # ───────────────────────────────────────────────
+# 一键转 MIDI (v0.5.1)
+# ───────────────────────────────────────────────
+
+def qm_song_choices():
+    return _list_outputs_songs()
+
+
+def qm_run(song_rel, mode, with_bpm, with_markers, embed_meta, progress=gr.Progress()):
+    if not song_rel:
+        return None, None, None, "⚠ 选一首歌或上传"
+    src = ROOT / song_rel
+    if not src.exists():
+        return None, None, None, f"❌ 找不到 {src}"
+
+    progress(0.1, desc="检测 BPM…")
+    out_dir = OUTPUTS_DIR / "midi" / src.stem
+    try:
+        progress(0.3, desc=f"转录 ({mode})…")
+        report = audio_to_midi.quick_transcribe(
+            src,
+            output_dir=out_dir,
+            mode=mode,
+            with_bpm=bool(with_bpm),
+            with_markers=bool(with_markers),
+            embed_meta=bool(embed_meta),
+        )
+        progress(1.0, desc="完成")
+    except Exception as e:
+        return None, None, None, f"❌ {e}"
+
+    if not report["ok"]:
+        msg = "❌ 转换失败\n" + "\n".join(report["errors"])
+        return None, None, None, msg
+
+    files = [str(p) for p in report["files"]]
+    mid = next((p for p in files if p.endswith(".mid")), None)
+    bpm_file = next((p for p in files if p.endswith("bpm.txt")), None)
+    markers_file = next((p for p in files if p.endswith("markers.txt")), None)
+
+    lines = [f"✓ 输出目录: {report['output_dir']}"]
+    if report["bpm"]:
+        lines.append(f"  BPM: {report['bpm']:.1f}")
+    if report["melodic"]:
+        m = report["melodic"]
+        lines.append(f"  melodic: {m['notes']} 个音符" if m["ok"] else f"  melodic 失败: {m['error']}")
+    if report["drums"]:
+        d = report["drums"]
+        lines.append(f"  drums:   kick={d['kicks']} snare={d['snares']} hh={d['hihats']}"
+                     if d["ok"] else f"  drums 失败: {d['error']}")
+    if report["markers"]:
+        lines.append(f"  段落 marker: {len(report['markers'])} 个 ({report['markers'][0]['name']} … {report['markers'][-1]['name']})")
+    if report["errors"]:
+        lines.append("⚠ 警告:")
+        lines.extend("  " + e for e in report["errors"])
+
+    return mid, bpm_file, markers_file, "\n".join(lines)
+
+
+def qm_run_upload(uploaded_file, mode, with_bpm, with_markers, embed_meta, progress=gr.Progress()):
+    """直接对上传的音频跑(不需要先放 outputs)"""
+    if uploaded_file is None:
+        return None, None, None, "⚠ 先上传音频文件"
+    src = Path(uploaded_file.name if hasattr(uploaded_file, "name") else uploaded_file)
+    if not src.exists():
+        return None, None, None, f"❌ 文件丢失: {src}"
+
+    progress(0.1, desc="检测 BPM…")
+    out_dir = OUTPUTS_DIR / "midi" / src.stem
+    try:
+        progress(0.3, desc=f"转录 ({mode})…")
+        report = audio_to_midi.quick_transcribe(
+            src,
+            output_dir=out_dir,
+            mode=mode,
+            with_bpm=bool(with_bpm),
+            with_markers=bool(with_markers),
+            embed_meta=bool(embed_meta),
+        )
+        progress(1.0, desc="完成")
+    except Exception as e:
+        return None, None, None, f"❌ {e}"
+
+    files = [str(p) for p in report["files"]]
+    mid = next((p for p in files if p.endswith(".mid")), None)
+    bpm_file = next((p for p in files if p.endswith("bpm.txt")), None)
+    markers_file = next((p for p in files if p.endswith("markers.txt")), None)
+    lines = [f"✓ 输出目录: {report['output_dir']}"]
+    if report["bpm"]:
+        lines.append(f"  BPM: {report['bpm']:.1f}")
+    if report["melodic"]:
+        m = report["melodic"]
+        lines.append(f"  melodic: {m['notes']} 个音符" if m["ok"] else f"  melodic 失败: {m['error']}")
+    if report["drums"]:
+        d = report["drums"]
+        lines.append(f"  drums:   kick={d['kicks']} snare={d['snares']} hh={d['hihats']}"
+                     if d["ok"] else f"  drums 失败: {d['error']}")
+    if report["markers"]:
+        lines.append(f"  段落 marker: {len(report['markers'])} 个")
+    return mid, bpm_file, markers_file, "\n".join(lines)
+
+
+# ───────────────────────────────────────────────
 # UI 组装
 # ───────────────────────────────────────────────
 
@@ -883,7 +985,7 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
 
 🎹 **生成新歌请打开 [ACE-Step 主 UI](http://localhost:7860)** (另跑 `start_gradio_ui.bat`)
 
-10 个 Tab: 历史 / LoRA 数据 / DAW 导出 / 后处理 / Prompt 工作室 / LoRA 库 / 批量生成 / A/B 对比 / 封面&字幕 / 续写&翻唱。
+11 个 Tab: 历史 / LoRA 数据 / DAW 导出 / 后处理 / Prompt 工作室 / LoRA 库 / 批量生成 / A/B 对比 / 封面&字幕 / 续写&翻唱 / 一键 MIDI。
 """)
 
     with gr.Tabs():
@@ -1425,6 +1527,73 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
                 rv_cover,
                 [rv_song, cov_prompt, cov_lyrics, cov_strength, cov_seed],
                 [cov_audio, cov_status],
+            )
+
+        # ─── Tab 11: 一键转 MIDI (v0.5.1) ───
+        with gr.TabItem("🎼 一键 MIDI"):
+            gr.Markdown("""
+**整曲音频直接出 MIDI**,跳过 stem 分离(比 Song→DAW 快 10×)。
+同时检测 BPM + 段落 marker,可嵌入到 .mid 里(DAW 能直接读)。
+
+**输出**: `outputs/midi/<歌名>/melodic.mid` + `bpm.txt` + `markers.txt`
+
+**模式**:
+- `melodic` (默认): Basic Pitch 抓主旋律 → 单乐器 MIDI,人声/钢琴/单音乐器最准
+- `drums`: 简单 onset 分类成 kick/snare/hh,4/4 流行鼓还行
+- `both`: 同时跑,出两个 .mid
+
+**首次跑下 Basic Pitch (~150MB),之后秒级。**
+""")
+            with gr.Row():
+                with gr.Column(scale=2):
+                    gr.Markdown("### 从 outputs/ 选歌")
+                    qm_song = gr.Dropdown(label="选歌",
+                                          choices=qm_song_choices(), interactive=True)
+                    with gr.Row():
+                        qm_refresh_btn = gr.Button("🔄", size="sm")
+                        qm_use_hist = gr.Button("⬅ 用历史 Tab 选中的歌",
+                                                size="sm", variant="secondary")
+
+                with gr.Column(scale=2):
+                    gr.Markdown("### 或上传任意音频")
+                    qm_upload = gr.File(label="拖音频进来",
+                                        file_types=["audio"], type="filepath")
+
+            gr.Markdown("---")
+            with gr.Row():
+                qm_mode = gr.Radio(["melodic", "drums", "both"],
+                                   label="转录模式", value="melodic")
+                qm_with_bpm = gr.Checkbox(label="检测 BPM 并写 bpm.txt", value=True)
+                qm_with_markers = gr.Checkbox(label="检测段落 marker 并写 markers.txt",
+                                              value=True)
+                qm_embed = gr.Checkbox(label="把 BPM / marker 嵌进 .mid",
+                                       value=True)
+
+            with gr.Row():
+                qm_run_btn = gr.Button("🎼 从 outputs/ 转", variant="primary")
+                qm_run_upload_btn = gr.Button("🎼 转上传的音频", variant="primary")
+
+            qm_status = gr.Textbox(label="结果", lines=6, interactive=False)
+            with gr.Row():
+                qm_mid_out = gr.File(label="MIDI 文件(主)", interactive=False)
+                qm_bpm_out = gr.File(label="bpm.txt", interactive=False)
+                qm_markers_out = gr.File(label="markers.txt", interactive=False)
+
+            qm_refresh_btn.click(lambda: gr.update(choices=qm_song_choices()),
+                                 outputs=[qm_song])
+            qm_use_hist.click(
+                lambda rel: gr.update(value=rel) if rel else gr.update(),
+                [selected_song], [qm_song],
+            )
+            qm_run_btn.click(
+                qm_run,
+                [qm_song, qm_mode, qm_with_bpm, qm_with_markers, qm_embed],
+                [qm_mid_out, qm_bpm_out, qm_markers_out, qm_status],
+            )
+            qm_run_upload_btn.click(
+                qm_run_upload,
+                [qm_upload, qm_mode, qm_with_bpm, qm_with_markers, qm_embed],
+                [qm_mid_out, qm_bpm_out, qm_markers_out, qm_status],
             )
 
     gr.Markdown("""

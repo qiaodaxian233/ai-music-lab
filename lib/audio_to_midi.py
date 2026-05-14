@@ -4,6 +4,7 @@
 - transcribe_drums: 简单 onset + 频谱分类 (kick/snare/hh), 质量看歌
 - detect_bpm: librosa beat track
 - detect_structure_markers: 段落边界检测 (intro/verse/chorus)
+- quick_transcribe: 一键串 (v0.5.1): 整曲音频 → MIDI + BPM + 段落 marker, 跳过 stem 分离
 """
 from pathlib import Path
 from typing import Optional
@@ -179,3 +180,147 @@ def detect_structure_markers(audio_path: Path, max_markers: int = 6) -> list:
         return markers
     except Exception:
         return []
+
+
+# ───────────────────────────────────────────────
+# quick_transcribe: 一键 (v0.5.1)
+# ───────────────────────────────────────────────
+
+def quick_transcribe(
+    audio_path: Path,
+    *,
+    output_dir: Optional[Path] = None,
+    mode: str = "melodic",   # 'melodic' | 'drums' | 'both'
+    with_bpm: bool = True,
+    with_markers: bool = True,
+    embed_meta: bool = True,  # 把 BPM/marker 嵌进 .mid 文件本身
+) -> dict:
+    """整曲音频 → MIDI + BPM + 段落 marker, **跳过 stem 分离**.
+
+    输出到 output_dir (默认 outputs/midi/<stem>/):
+      - melodic.mid  (mode='melodic' 或 'both')
+      - drums.mid    (mode='drums'   或 'both')
+      - bpm.txt      (with_bpm=True)
+      - markers.txt  (with_markers=True)
+
+    embed_meta=True 会把 BPM 写进 MIDI 的 initial_tempo,把 markers 写成
+    pretty_midi 的 lyric/text 事件 (DAW 能读到当作段落 marker).
+
+    返回 {
+      ok: bool,
+      output_dir: Path,
+      files: [Path, ...],
+      bpm: float | None,
+      markers: list,
+      melodic: {ok, error, notes} | None,
+      drums:   {ok, error, kicks, snares, hihats, total} | None,
+      errors: [str, ...],
+    }
+    """
+    audio_path = Path(audio_path)
+    if not audio_path.exists():
+        return {"ok": False, "errors": [f"找不到 {audio_path}"], "files": []}
+
+    if output_dir is None:
+        output_dir = audio_path.parent.parent / "outputs" / "midi" / audio_path.stem
+        # 如果 audio 不在 outputs 里, 上面那个相对路径会乱跳, 兜底:
+        if "outputs" not in str(audio_path):
+            output_dir = audio_path.parent / "midi" / audio_path.stem
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    result = {
+        "ok": True,
+        "output_dir": output_dir,
+        "files": [],
+        "bpm": None,
+        "markers": [],
+        "melodic": None,
+        "drums": None,
+        "errors": [],
+    }
+
+    # 1. BPM (轻量, 先跑)
+    if with_bpm or mode in ("drums", "both") or embed_meta:
+        try:
+            result["bpm"] = detect_bpm(audio_path)
+        except Exception as e:
+            result["errors"].append(f"BPM 检测失败: {e}")
+            result["bpm"] = 120.0
+        if with_bpm:
+            bpm_path = output_dir / "bpm.txt"
+            bpm_path.write_text(f"{result['bpm']:.2f}\n", encoding="utf-8")
+            result["files"].append(bpm_path)
+
+    # 2. 段落 marker
+    if with_markers or embed_meta:
+        try:
+            result["markers"] = detect_structure_markers(audio_path)
+        except Exception as e:
+            result["errors"].append(f"段落检测失败: {e}")
+            result["markers"] = []
+        if with_markers and result["markers"]:
+            mk_path = output_dir / "markers.txt"
+            lines = ["# position(sec)\tname"]
+            for m in result["markers"]:
+                lines.append(f"{m['position']:.2f}\t{m['name']}")
+            mk_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            result["files"].append(mk_path)
+
+    # 3. melodic MIDI (Basic Pitch)
+    if mode in ("melodic", "both"):
+        mp = output_dir / "melodic.mid"
+        r = transcribe_melodic(audio_path, mp)
+        result["melodic"] = r
+        if r["ok"]:
+            if embed_meta and (result["bpm"] or result["markers"]):
+                _inject_meta_into_midi(mp, result["bpm"] or 120.0, result["markers"])
+            result["files"].append(mp)
+        else:
+            result["errors"].append(f"melodic 失败: {r['error']}")
+
+    # 4. drums MIDI
+    if mode in ("drums", "both"):
+        dp = output_dir / "drums.mid"
+        r = transcribe_drums(audio_path, dp, bpm=result["bpm"] or 120.0)
+        result["drums"] = r
+        if r["ok"]:
+            if embed_meta and result["markers"]:
+                _inject_meta_into_midi(dp, result["bpm"] or 120.0, result["markers"])
+            result["files"].append(dp)
+        else:
+            result["errors"].append(f"drums 失败: {r['error']}")
+
+    result["ok"] = bool(result["files"]) and not any(
+        e for e in result["errors"]
+        if "melodic 失败" in e or "drums 失败" in e
+    )
+    return result
+
+
+def _inject_meta_into_midi(midi_path: Path, bpm: float, markers: list):
+    """把 BPM + markers 写进 .mid 文件. markers 用 pretty_midi 的 text 事件.
+
+    DAW (Reaper / Ableton / Cubase) 都能读 text 事件当 marker.
+    """
+    try:
+        import pretty_midi
+        pm = pretty_midi.PrettyMIDI(str(midi_path))
+        # 重新设 tempo (pretty_midi 没有简单 API 改 initial_tempo,绕个弯)
+        # 一种办法: 在 MIDI 头加 tempo change
+        # pretty_midi 提供 _tick_scales 但 API 私有, 这里只能新建一个再 merge
+        # 实践中 Basic Pitch 输出的 MIDI tempo 通常是 120,
+        # 重新写一个相同内容但 tempo 不同的 MIDI:
+        new = pretty_midi.PrettyMIDI(initial_tempo=float(bpm))
+        for inst in pm.instruments:
+            new.instruments.append(inst)
+        # markers → text 事件 (放在 lyrics, DAW 多数把它当 marker)
+        for m in markers:
+            new.lyrics.append(pretty_midi.Lyric(
+                text=m["name"],
+                time=float(m["position"]),
+            ))
+        new.write(str(midi_path))
+    except Exception:
+        # 失败不致命, .mid 仍然有效, 只是没 tempo/marker
+        pass
