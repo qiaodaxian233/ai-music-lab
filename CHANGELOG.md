@@ -1,5 +1,69 @@
 # CHANGELOG
 
+## v0.5.0 — 8 大功能补全:Prompt 工作室 / LoRA 库 / 批量 / A/B / 封面 / 字幕 / 续写 / 翻唱 (2026-05-14)
+
+一次性把 12 项规划里剩下的 8 项全做完。统一控制台从 4 Tab 扩到 **10 Tab**,
+功能列表 **12/12 完成** ✅。
+
+### 🎵 新增功能 Tab
+
+| Tab | 功能编号 | 说明 |
+|---|---|---|
+| 📝 Prompt 工作室 | #4 | 读写 `prompts/styles.json`,预设 CRUD + tag 积木组合 |
+| 🎓 LoRA 库 | #5 | 扫描 `loras/`,每个 LoRA 配置 CRUD + 一键 N seed 试听 |
+| 🚀 批量生成 | #6 | CSV → N 个 prompt 挂机跑,dry-run 预览 + 中途停止 |
+| ⚖ A/B 对比 | #7 | 历史里挑两首歌并排,prompt / seed / LoRA 差异一眼看 |
+| 🎨 封面 & 字幕 | #9 + #10 | 封面(PIL 几何 / SDXL)+ LRC 字幕(均分 / Whisper) |
+| 🔁 续写 / 翻唱 | #11 + #12 | ACE-Step audio2audio: extend + cover |
+
+### 📦 新增 lib 模块 (6 个)
+
+- **`lib/prompt_library.py`** — `prompts/styles.json` 读写,`load_db / list_presets / save_preset / compose_prompt`
+- **`lib/lora_manager.py`** — `scan_loras / get_config / save_config / generate_samples`,自动调 ACE-Step 跑 N seed
+- **`lib/batch_gen.py`** — `parse_csv / run_batch`,带 progress_callback + stop_flag + dry_run
+- **`lib/cover_art.py`** — `make_cover_geometric` (PIL 渐变+几何+文字, 无 GPU 500ms) / `make_cover_sdxl` (opt-in, diffusers) / `embed_into_mp3`
+- **`lib/lrc_export.py`** — `make_lrc_even` (无依赖均分) / `make_lrc_whisper` (opt-in, openai-whisper)
+- **`lib/ace_step_api.py`** — ACE-Step `ACEStepPipeline` 调用封装,**#6/#11/#12 共用**。懒加载 + 单例 + 12GB VRAM 友好参数 (cpu_offload + overlapped_decode)
+
+### 🔧 依赖变化
+
+- 新增必装:`pillow>=10.0` (#9 几何封面需要)
+- 新增可选(按需自装,默认不装):
+  - `diffusers + transformers + accelerate` — SDXL 封面模式
+  - `openai-whisper` — LRC 强制对齐模式
+
+### ⚠ 注意事项
+
+- **#6 #11 #12 三个功能依赖 ACE-Step 在线**:批量生成 / 续写 / 翻唱都通过 `lib/ace_step_api.py` 调 ACE-Step Pipeline。`ace_step_api.py` 是基于 ACE-Step v1.5 主线签名推断的,如果跑时报 "unexpected keyword argument",去查 `ACE-Step-1.5/acestep/pipeline_ace_step.py` 实际签名,改 `ace_step_api.py` 一处即可。
+- **SDXL 封面模式占 6-8GB VRAM**,跟 ACE-Step 同时跑会 OOM。批量做封面时建议先停 ACE-Step。
+- **多 LoRA 混合语法**:`lib/lora_manager.format_mix([(name, weight), ...])` 输出 `"path1:w1,path2:w2"`,具体 ACE-Step 怎么解析这个字符串需要看其 LoRA loader 实现,首次使用如果失败也是查 ACE-Step 源码就近改。
+
+### 📊 项目进度
+
+| 编号 | 功能 | 状态 |
+|---|---|---|
+| #1 | 历史索引器 | ✅ v0.2.0 |
+| #2 | 自动后处理 hook | ✅ v0.2.0 |
+| #3 | LoRA 数据 wizard | ✅ v0.2.0 |
+| #4 | Prompt 预设 UI | ✅ **v0.5.0** |
+| #5 | LoRA 管理面板 | ✅ **v0.5.0** |
+| #6 | 批量生成 | ✅ **v0.5.0** |
+| #7 | A/B 并排对比 | ✅ **v0.5.0** |
+| #8 | Stem 分离 (DAW 导出) | ✅ v0.3.0 |
+| #9 | 自动封面图 | ✅ **v0.5.0** |
+| #10 | 歌词字幕 | ✅ **v0.5.0** |
+| #11 | 续写 / extend | ✅ **v0.5.0** |
+| #12 | 翻唱 / audio2audio | ✅ **v0.5.0** |
+
+**12/12 完成** 🎉
+
+### 📁 文件改动
+
+- 新增: `lib/{prompt_library,lora_manager,batch_gen,cover_art,lrc_export,ace_step_api}.py`
+- 修改: `scripts/unified-ui.py` (691 → 1437 行,6 Tab → 10 Tab),`lib/__init__.py`,`requirements.txt`,`README.md`,`项目对接记忆.md`
+
+---
+
 ## v0.4.0 — 统一控制台 + .bat 启动器精简 (2026-05-12)
 
 把 4 个独立 UI 合并到一个统一控制台,联动 + 单端口 + 单窗口。

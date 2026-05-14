@@ -2,7 +2,7 @@
 
 个人 AI 音乐生成工作台，基于 [ACE-Step v1.5](https://github.com/ace-step/ACE-Step-1.5)。
 
-本仓库本身不含模型代码，是 **ACE-Step 的包装层 + 历史索引 + 自动后处理 + LoRA 数据 wizard**。
+本仓库本身不含模型代码，是 **ACE-Step 的包装层 + 10 Tab 统一控制台**(历史索引、自动后处理、LoRA 数据/管理、批量生成、A/B 对比、Prompt 工作室、Song→DAW 导出、封面&字幕、续写&翻唱)。
 
 ## 快速开始
 
@@ -13,7 +13,7 @@
 | 双击文件 | 端口 | 作用 |
 |---|---|---|
 | `start-ui.bat` | 7860 | ACE-Step 主 UI(生成新歌, 调 ACE-Step 自带的官方启动器) |
-| `start-lab.bat` | 7861 | **统一控制台**(4 个 Tab: 历史 / LoRA / DAW 导出 / 后处理) |
+| `start-lab.bat` | 7861 | **统一控制台**(10 Tab,见下方表格) |
 
 两个可以同时开,互不打扰。
 
@@ -38,7 +38,7 @@ source .venv/bin/activate
 # ACE-Step 主 UI(http://localhost:7860, 用 ACE-Step 自带的官方启动器)
 cd ACE-Step-1.5 && bash start_gradio_ui.sh && cd ..
 
-# 统一控制台 UI(http://localhost:7861, 4 个 Tab)
+# 统一控制台 UI(http://localhost:7861, 10 Tab)
 python scripts/unified-ui.py
 ```
 
@@ -50,6 +50,12 @@ python scripts/unified-ui.py
 | 🎓 LoRA 训练数据 | 分析参考音频 → caption → metadata.csv | 配合 ACE-Step UI 的 LoRA Training 标签 |
 | 🎹 Song → DAW Export | 拆 stem + 转 MIDI + 生成 Reaper 工程 | 一键「用历史 Tab 选中的歌」 |
 | 🔄 后处理控制 | watcher 启停 + 手动跑后处理 | 一键「立即后处理选中的歌」 |
+| 📝 Prompt 工作室 | `styles.json` 预设 CRUD + tag 积木组合 | 复制 prompt 去 ACE-Step UI |
+| 🎓 LoRA 库 | 扫 `loras/`,管理每个的描述/数据/推荐 prompt + 一键 N seed 试听 | 试听产物入历史索引 |
+| 🚀 批量生成 | CSV → N 个 prompt 挂机跑,dry-run + 停止 | 输出到 `outputs/batches/` |
+| ⚖ A/B 对比 | 历史里挑两首并排听,看 prompt / seed / LoRA 差异 | 读历史 |
+| 🎨 封面 & 字幕 | 几何/SDXL 封面 + 均分/Whisper LRC,封面可嵌进 MP3 | 「⬅ 用历史 Tab 选中的歌」 |
+| 🔁 续写 / 翻唱 | extend 给已有歌加 N 秒 / cover 换风格保旋律 | 「⬅ 用历史 Tab 选中的歌」 |
 
 ACE-Step 主 UI 不在控制台里,因为那是 ACE-Step 自己的 Gradio,跑在另一个端口。
 控制台顶部有跳转链接。
