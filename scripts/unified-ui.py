@@ -285,9 +285,9 @@ def l_save_captions(project_name: str, table_data):
 
 def l_quick_import(files, dataset_name, mode, target_sr, target_channels,
                    progress=gr.Progress()):
-    """一键: 拖音频 → (可选) Demucs 拆 vocals → prepare_dataset"""
+    """一键: 拖音频 → (可选) Demucs 拆 vocals → prepare_dataset → 填表格"""
     if not files:
-        return "⚠ 先拖音频文件进来", None, gr.update()
+        return "⚠ 先拖音频文件进来", None, gr.update(), []
 
     # gr.File(file_count='multiple', type='filepath') 返字符串路径列表
     paths = []
@@ -311,7 +311,7 @@ def l_quick_import(files, dataset_name, mode, target_sr, target_channels,
             progress_callback=cb,
         )
     except Exception as e:
-        return f"❌ {e}", None, gr.update()
+        return f"❌ {e}", None, gr.update(), []
 
     lines = []
     if r["ok"]:
@@ -323,7 +323,7 @@ def l_quick_import(files, dataset_name, mode, target_sr, target_channels,
             lines.append(f"  prepare: 处理 {prep.get('succeeded', '?')}/{prep.get('total', '?')} 首")
             lines.append(f"  metadata.csv: {r['dataset_dir']}/metadata.csv")
         lines.append("")
-        lines.append("→ 接着在下面「现有项目」里选这个项目,编辑 caption,然后去 ACE-Step UI 训")
+        lines.append("→ 下方表格已自动加载,编辑 caption → 点'💾 保存',再去 ACE-Step UI 训")
     else:
         lines.append(f"❌ 全部失败")
     if r.get("errors"):
@@ -333,10 +333,26 @@ def l_quick_import(files, dataset_name, mode, target_sr, target_channels,
         if len(r["errors"]) > 6:
             lines.append(f"  ...还有 {len(r['errors']) - 6} 个,看 stderr")
 
-    # 刷新项目下拉
+    # 把 prepare_result 转成表格行
+    rows = []
+    prep = r.get("prepare_result") or {}
+    for t in prep.get("tracks", []):
+        rows.append([
+            t["dataset_filename"],
+            str(t.get("bpm", "") or ""),
+            str(t.get("key", "") or ""),
+            f"{t['duration']:.1f}s" if t.get("duration") else "",
+            t.get("caption", ""),
+        ])
+
+    # 刷新项目下拉 + 填表格
     new_choices = _list_lora_projects()
-    return ("\n".join(lines), None,
-            gr.update(choices=new_choices, value=dataset_name))
+    return (
+        "\n".join(lines),
+        None,                                           # 重置 file upload
+        gr.update(choices=new_choices, value=dataset_name),  # 项目下拉选中新数据集
+        rows,                                           # 表格内容
+    )
 
 
 # ───────────────────────────────────────────────
@@ -1407,7 +1423,7 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
             l_qi_btn.click(
                 l_quick_import,
                 [l_qi_files, l_qi_name, l_qi_mode, l_sr, l_ch],
-                [l_qi_status, l_qi_files, l_dropdown],
+                [l_qi_status, l_qi_files, l_dropdown, l_table],
             )
             l_create_btn.click(l_create_project, [l_new_box], [l_status, l_dropdown])
             l_analyze_btn.click(l_analyze, [l_dropdown, l_sr, l_ch], [l_status, l_table])

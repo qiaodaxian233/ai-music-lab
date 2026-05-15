@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v0.5.6.1 — 一键导入跑完自动填表格 (2026-05-15)
+
+**hotfix**: 用户反馈"一键处理完不知道结果去哪了" — 实际数据生成正常(在 `datasets/<项目>/`),但 UI 没自动刷下面的表格,要再点一次「🔍 分析并准备训练集」才看得到 caption 表。
+
+修了 — `l_quick_import` 现在直接把 prepare_dataset 的 tracks 转表格行返回。
+
+跑完一键处理直接在下面看到 caption 表 + 自动选中新项目 + 可以直接编辑保存,**不用再点二次**。
+
+### 📁 文件改动
+
+- 修改: `scripts/unified-ui.py`(`l_quick_import` 返 4 个值含 table_rows + click 输出 list 加 `l_table`)
+- 修改: `CHANGELOG.md` + `项目对接记忆.md`
+
+---
+
 ## v0.5.6 — 一键打包 LoRA 训练集 + caption 模板升级 + 保存 bug 修复 (2026-05-15)
 
 之前训 LoRA 要手动:
