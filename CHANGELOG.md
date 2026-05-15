@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## v0.5.2 — 4 个高性价比补充功能 (2026-05-15)
+
+按"发歌前最常用的工具"角度补 4 个,每个都在 1 小时内完工,无重依赖。
+
+### 🎵 新增
+
+| 功能 | 入口 | 说明 |
+|---|---|---|
+| 📦 一键打包 | 新 Tab「📦 发行打包」 | wav + mp3 + cover + lrc + mid + metadata → zip,投稿一次性搞定 |
+| ✂ 自动剪短版 | 新 Tab「📦 发行打包」 | chorus 检测 + 30s 截取 + 淡入淡出,发社交平台用 |
+| 🔀 LoRA 权重融合 | 「🎓 LoRA 库」Tab 底部 | 线性插值两个 .safetensors,自动写配置,风格混血不用每次叠加 |
+| 🈶 中文 → 拼音 | 「📝 Prompt 工作室」Tab 底部 | pypinyin 带音调输出,ACE-Step 训中文 LoRA 必备 |
+
+### 📦 新增 lib 模块 (4 个)
+
+- **`lib/export_bundle.py`** — `build_bundle()`,串联打包流程,缺的衍生物会现生成(封面/lrc/mid 都自动补)
+- **`lib/lora_merge.py`** — `merge_two(a, b, wa, wb)`,float32 累加再转回原 dtype,自动处理形状不匹配,可同时 `auto_generate_config()` 写 .json
+- **`lib/audio_highlight.py`** — `make_highlight()`,chroma 自相似矩阵 + 滑动窗口找最重复段,加淡入淡出。沙箱实测能从 60s 模拟"歌"准确切到 chorus 区
+- **`lib/pinyin_tools.py`** — `to_pinyin / to_pinyin_inline / mixed_format`,保留 `[Verse]` 章节标签和标点,支持音调/数字/无音调三种格式
+
+### 🔧 依赖
+
+- 新增必装: `pypinyin>=0.49` (~几 MB)、`safetensors>=0.4` (~几 MB)
+
+### 📊 沙箱实测结果
+
+- pinyin: "今夜星光灿烂" → "jīn yè xīng guāng càn làn" ✓
+- lora_merge: 0.7·A + 0.3·B 与手算误差 0.00e+00 ✓
+- audio_highlight: 60s 模拟歌(chorus 在 20-40s & 50-60s)检测到 24.1s~54.1s,落在 chorus 区域内 ✓
+
+### 📁 文件改动
+
+- 新增: `lib/{export_bundle,lora_merge,audio_highlight,pinyin_tools}.py`
+- 修改: `scripts/unified-ui.py`(1607→1902 行,Tab 11→12 + Prompt/LoRA Tab 内嵌子工具)
+- 修改: `requirements.txt`(加 pypinyin + safetensors)
+- 修改: `README.md`、`项目对接记忆.md`、本 CHANGELOG
+
+---
+
 ## v0.5.1 — 一键转 MIDI Tab (2026-05-14)
 
 补一个 **"🎼 一键 MIDI"** Tab — 整曲音频直接出 MIDI,**跳过 Demucs stem 分离**(比 Song→DAW 路径快 10×)。

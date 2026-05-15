@@ -26,12 +26,16 @@ import gradio as gr
 
 from lib import (
     ace_step_api,
+    audio_highlight,
     audio_to_midi,
     batch_gen,
     cover_art,
+    export_bundle,
     history,
     lora_manager,
+    lora_merge,
     lrc_export,
+    pinyin_tools,
     postprocess,
     prompt_library,
     reaper_project,
@@ -973,6 +977,165 @@ def qm_run_upload(uploaded_file, mode, with_bpm, with_markers, embed_meta, progr
 
 
 # ───────────────────────────────────────────────
+# 发行打包 (v0.5.2 功能 A + C)
+# ───────────────────────────────────────────────
+
+def pk_song_choices():
+    return _list_outputs_songs()
+
+
+def pk_build(song_rel, mp3, cover, lrc, midi, metadata, cover_mode,
+             progress=gr.Progress()):
+    if not song_rel:
+        return None, "⚠ 选一首歌"
+    audio = ROOT / song_rel
+    if not audio.exists():
+        return None, f"❌ 找不到 {audio}"
+
+    def cb(i, total, msg):
+        progress(i / total, desc=msg)
+
+    try:
+        r = export_bundle.build_bundle(
+            audio,
+            include_mp3=bool(mp3),
+            include_cover=bool(cover),
+            include_lrc=bool(lrc),
+            include_midi=bool(midi),
+            include_metadata=bool(metadata),
+            cover_mode=cover_mode,
+            progress_callback=cb,
+        )
+    except Exception as e:
+        return None, f"❌ {e}"
+
+    lines = [f"✓ 包大小 {r['size_mb']} MB → {r['zip_path']}"]
+    if r["included"]:
+        lines.append("✓ 已含: " + ", ".join(r["included"]))
+    if r["missing"]:
+        lines.append("⚠ 缺: " + ", ".join(r["missing"]))
+    if r["errors"]:
+        lines.append("❌ 错误:")
+        lines.extend("  " + e for e in r["errors"])
+    return str(r["zip_path"]), "\n".join(lines)
+
+
+def pk_highlight(song_rel, target_sec, strategy, fade_in, fade_out,
+                 progress=gr.Progress()):
+    if not song_rel:
+        return None, "⚠ 选一首歌"
+    audio = ROOT / song_rel
+    if not audio.exists():
+        return None, f"❌ 找不到 {audio}"
+
+    progress(0.1, desc="加载音频…")
+    try:
+        progress(0.4, desc=f"切 {int(target_sec)}s 片段({strategy})…")
+        r = audio_highlight.make_highlight(
+            audio,
+            target_seconds=float(target_sec),
+            strategy=strategy,
+            fade_in_ms=float(fade_in),
+            fade_out_ms=float(fade_out),
+        )
+        progress(1.0, desc="完成")
+    except Exception as e:
+        return None, f"❌ {e}"
+
+    if not r["ok"]:
+        return None, f"❌ {r.get('error')}"
+    msg = (f"✓ {r['strategy_used']}\n"
+           f"  片段: {r['start_sec']:.1f}s ~ {r['end_sec']:.1f}s "
+           f"({r['duration']:.1f}s)\n"
+           f"  输出: {r['output_path']}")
+    return str(r["output_path"]), msg
+
+
+# ───────────────────────────────────────────────
+# LoRA 合并 (v0.5.2 功能 B) — 嵌入 LoRA 库 Tab
+# ───────────────────────────────────────────────
+
+def lo_merge_run(name_a, name_b, weight_a, weight_b, output_name, normalize,
+                 write_config):
+    if not name_a or not name_b:
+        return "⚠ A 和 B 都要选"
+    if name_a == name_b:
+        return "⚠ A 和 B 不能是同一个"
+
+    # 找 .safetensors 路径
+    src_a = src_b = None
+    for ext in lora_manager.WEIGHT_EXTS:
+        if (lora_manager.LORAS_DIR / f"{name_a}{ext}").exists():
+            src_a = lora_manager.LORAS_DIR / f"{name_a}{ext}"
+            break
+    for ext in lora_manager.WEIGHT_EXTS:
+        if (lora_manager.LORAS_DIR / f"{name_b}{ext}").exists():
+            src_b = lora_manager.LORAS_DIR / f"{name_b}{ext}"
+            break
+
+    if not src_a or not src_b:
+        return f"❌ 找不到权重文件 ({name_a} / {name_b})"
+
+    # 只支持 .safetensors 融合
+    if src_a.suffix != ".safetensors" or src_b.suffix != ".safetensors":
+        return ("❌ 目前只支持 .safetensors 融合。"
+                f"A={src_a.suffix} B={src_b.suffix}")
+
+    try:
+        r = lora_merge.merge_two(
+            src_a, src_b,
+            weight_a=float(weight_a), weight_b=float(weight_b),
+            output_name=(output_name or "").strip() or None,
+            normalize=bool(normalize),
+        )
+    except Exception as e:
+        return f"❌ {e}"
+
+    if not r["ok"]:
+        return f"❌ {r.get('error')}"
+
+    msg_lines = [
+        f"✓ 融合完成 → {r['output_path']} ({r['size_mb']} MB)",
+        f"  实际权重: A={r['weight_a']:.3f}, B={r['weight_b']:.3f}",
+        f"  张量: 共同 {r['common_keys']} / 仅 A {r['only_a_keys']} / 仅 B {r['only_b_keys']}",
+    ]
+    if r["shape_mismatches"]:
+        msg_lines.append(f"⚠ {len(r['shape_mismatches'])} 个张量形状不匹配,只用 A 的:")
+        for sm in r["shape_mismatches"][:3]:
+            msg_lines.append(f"    {sm}")
+
+    if write_config:
+        try:
+            cfg_path = lora_merge.auto_generate_config(
+                r["output_path"], src_a, src_b, r["weight_a"], r["weight_b"],
+            )
+            msg_lines.append(f"✓ 自动写配置 → {cfg_path}")
+        except Exception as e:
+            msg_lines.append(f"⚠ 配置写入失败: {e}")
+
+    msg_lines.append("→ 点击 LoRA 库顶部「🔄 重新扫描」就能看到新 LoRA")
+    return "\n".join(msg_lines)
+
+
+# ───────────────────────────────────────────────
+# 中文 → 拼音 (v0.5.2 功能 D) — 嵌入 Prompt 工作室 Tab
+# ───────────────────────────────────────────────
+
+def py_convert(text, tone, fmt):
+    if not (text or "").strip():
+        return ""
+    try:
+        if fmt == "并排显示 (汉字 + 拼音)":
+            return pinyin_tools.mixed_format(text, tone=tone)
+        elif fmt == "纯拼音 (送 prompt)":
+            return pinyin_tools.to_pinyin_inline(text, tone=tone)
+        else:
+            return pinyin_tools.to_pinyin(text, tone=tone)
+    except Exception as e:
+        return f"❌ {e}\n\n提示: 没装 pypinyin? pip install pypinyin"
+
+
+# ───────────────────────────────────────────────
 # UI 组装
 # ───────────────────────────────────────────────
 
@@ -985,7 +1148,7 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
 
 🎹 **生成新歌请打开 [ACE-Step 主 UI](http://localhost:7860)** (另跑 `start_gradio_ui.bat`)
 
-11 个 Tab: 历史 / LoRA 数据 / DAW 导出 / 后处理 / Prompt 工作室 / LoRA 库 / 批量生成 / A/B 对比 / 封面&字幕 / 续写&翻唱 / 一键 MIDI。
+12 个 Tab: 历史 / LoRA 数据 / DAW 导出 / 后处理 / Prompt 工作室 / LoRA 库 / 批量生成 / A/B 对比 / 封面&字幕 / 续写&翻唱 / 一键 MIDI / 发行打包。
 """)
 
     with gr.Tabs():
@@ -1226,6 +1389,34 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
             ps_build_btn.click(ps_build_from_tags,
                                ps_tag_pickers + [ps_extra], [ps_built])
 
+            # ─── 子工具: 中文 → 拼音 (v0.5.2 #D) ───
+            gr.Markdown("---")
+            gr.Markdown("""### 🈶 中文 → 拼音 (训中文 LoRA / 写中文歌词必备)
+ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训得多)。""")
+            with gr.Row():
+                with gr.Column(scale=2):
+                    py_in = gr.Textbox(label="中文输入",
+                                       lines=8,
+                                       placeholder="支持章节标签 [Verse 1] [Chorus] 等(保留不转)")
+                with gr.Column(scale=2):
+                    py_out = gr.Textbox(label="拼音输出 (可复制)",
+                                        lines=8, interactive=True)
+            with gr.Row():
+                py_tone = gr.Radio(
+                    [("带音调 nǐ hǎo", "tone_marks"),
+                     ("数字调 ni3 hao3", "numbers"),
+                     ("无音调 ni hao", "none")],
+                    label="音调样式",
+                    value="tone_marks",
+                )
+                py_fmt = gr.Radio(
+                    ["逐行 (歌词模式)", "并排显示 (汉字 + 拼音)", "纯拼音 (送 prompt)"],
+                    label="格式",
+                    value="逐行 (歌词模式)",
+                )
+                py_btn = gr.Button("🈶 转换", variant="primary")
+            py_btn.click(py_convert, [py_in, py_tone, py_fmt], [py_out])
+
         # ─── Tab 6: LoRA 库 (#5) ───
         with gr.TabItem("🎓 LoRA 库"):
             gr.Markdown("""
@@ -1275,7 +1466,6 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
             lm_test_status = gr.Textbox(label="进度", interactive=False)
             lm_test_files = gr.Files(label="生成的样本(下载/试听)")
 
-            lm_refresh_btn.click(lm_scan_table, outputs=[lm_table, lm_dropdown])
             lm_dropdown.change(
                 lm_load_config, [lm_dropdown],
                 [lm_desc, lm_dataset, lm_rec_prompt, lm_steps, lm_lr,
@@ -1291,6 +1481,43 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
                 lm_generate_samples,
                 [lm_dropdown, lm_test_prompt, lm_test_seeds, lm_test_duration],
                 [lm_test_status, lm_test_files],
+            )
+
+            # ─── 子工具: LoRA 权重融合 (v0.5.2 #B) ───
+            gr.Markdown("---")
+            gr.Markdown("""### 🔀 LoRA 权重融合
+线性插值两个 LoRA 的 .safetensors,产新文件,跟原 LoRA 一样用。
+公式: `merged = wa·A + wb·B` (共同 key)。**只支持 .safetensors**。
+**装 safetensors**: `pip install safetensors` (没装会报错)。""")
+            with gr.Row():
+                lo_a = gr.Dropdown(label="LoRA A", choices=[], interactive=True)
+                lo_wa = gr.Slider(label="A 权重", minimum=0.0, maximum=2.0,
+                                  step=0.05, value=0.5)
+                lo_b = gr.Dropdown(label="LoRA B", choices=[], interactive=True)
+                lo_wb = gr.Slider(label="B 权重", minimum=0.0, maximum=2.0,
+                                  step=0.05, value=0.5)
+            with gr.Row():
+                lo_outname = gr.Textbox(label="输出名 (不含扩展名,留空自动 A_x_B)",
+                                        placeholder="例: rock-folk-blend-v1")
+                lo_normalize = gr.Checkbox(label="归一化权重 (wa+wb=1)", value=False)
+                lo_write_cfg = gr.Checkbox(label="自动写 .json 配置", value=True)
+            lo_merge_btn = gr.Button("🔀 融合", variant="primary")
+            lo_merge_status = gr.Textbox(label="结果", lines=6, interactive=False)
+
+            # 刷新表的时候顺便刷新 merge 下拉
+            def _lm_refresh_all():
+                rows, dd = lm_scan_table()
+                names = [l["name"] for l in lora_manager.scan_loras()]
+                return rows, dd, gr.update(choices=names), gr.update(choices=names)
+
+            lm_refresh_btn.click(
+                _lm_refresh_all,
+                outputs=[lm_table, lm_dropdown, lo_a, lo_b],
+            )
+            lo_merge_btn.click(
+                lo_merge_run,
+                [lo_a, lo_b, lo_wa, lo_wb, lo_outname, lo_normalize, lo_write_cfg],
+                [lo_merge_status],
             )
 
         # ─── Tab 7: 批量生成 (#6) ───
@@ -1594,6 +1821,74 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
                 qm_run_upload,
                 [qm_upload, qm_mode, qm_with_bpm, qm_with_markers, qm_embed],
                 [qm_mid_out, qm_bpm_out, qm_markers_out, qm_status],
+            )
+
+        # ─── Tab 12: 发行打包 (v0.5.2 #A + #C) ───
+        with gr.TabItem("📦 发行打包"):
+            gr.Markdown("""
+发歌前的最后一步:
+- **打包**:一键把 wav + mp3 + cover + lrc + mid + metadata 打成 zip,给朋友/平台投稿
+- **剪短版**:从全曲检测 chorus,截 30 秒带淡入淡出的预告片,发社交平台
+""")
+            with gr.Row():
+                pk_song = gr.Dropdown(label="选 outputs/ 里的歌",
+                                      choices=pk_song_choices(), interactive=True)
+                pk_refresh_btn = gr.Button("🔄", size="sm")
+                pk_use_hist = gr.Button("⬅ 用历史 Tab 选中的歌", size="sm")
+
+            with gr.Row():
+                # 打包侧
+                with gr.Column():
+                    gr.Markdown("### 📦 打包成 zip")
+                    pk_inc_mp3 = gr.Checkbox(label="含 MP3 (没 mp3 会自动转)",
+                                             value=True)
+                    pk_inc_cover = gr.Checkbox(label="含封面 (没有则生成)",
+                                               value=True)
+                    pk_cover_mode = gr.Radio(["geometric", "sdxl"],
+                                             label="自动生成封面用哪种",
+                                             value="geometric")
+                    pk_inc_lrc = gr.Checkbox(label="含歌词 .lrc (没有则按均分生成)",
+                                             value=True)
+                    pk_inc_midi = gr.Checkbox(label="含主旋律 .mid (没有则用 Basic Pitch 现转)",
+                                              value=True)
+                    pk_inc_meta = gr.Checkbox(label="含 metadata.json (从历史索引导出)",
+                                              value=True)
+                    pk_build_btn = gr.Button("📦 打包", variant="primary")
+                    pk_zip_out = gr.File(label="下载 zip", interactive=False)
+                    pk_build_status = gr.Textbox(label="状态", lines=5, interactive=False)
+
+                # 剪短版侧
+                with gr.Column():
+                    gr.Markdown("### ✂ 自动剪短版 (chorus 检测)")
+                    with gr.Row():
+                        pk_target = gr.Slider(label="目标时长 (秒)",
+                                              minimum=15, maximum=90, step=5,
+                                              value=30)
+                        pk_strategy = gr.Radio(["chorus", "middle", "start"],
+                                               label="策略", value="chorus")
+                    with gr.Row():
+                        pk_fade_in = gr.Number(label="淡入 (ms)", value=50)
+                        pk_fade_out = gr.Number(label="淡出 (ms)", value=1000)
+                    pk_clip_btn = gr.Button("✂ 剪短版", variant="primary")
+                    pk_clip_audio = gr.Audio(label="预览", interactive=False)
+                    pk_clip_status = gr.Textbox(label="状态", lines=4, interactive=False)
+
+            pk_refresh_btn.click(lambda: gr.update(choices=pk_song_choices()),
+                                 outputs=[pk_song])
+            pk_use_hist.click(
+                lambda rel: gr.update(value=rel) if rel else gr.update(),
+                [selected_song], [pk_song],
+            )
+            pk_build_btn.click(
+                pk_build,
+                [pk_song, pk_inc_mp3, pk_inc_cover, pk_inc_lrc,
+                 pk_inc_midi, pk_inc_meta, pk_cover_mode],
+                [pk_zip_out, pk_build_status],
+            )
+            pk_clip_btn.click(
+                pk_highlight,
+                [pk_song, pk_target, pk_strategy, pk_fade_in, pk_fade_out],
+                [pk_clip_audio, pk_clip_status],
             )
 
     gr.Markdown("""
