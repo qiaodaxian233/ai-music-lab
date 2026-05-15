@@ -27,4 +27,8 @@ v0.5.3:
 
 v0.5.6:
 - lora_dataset_builder: 拖音频一键打包训练集 (可选 Demucs 拆 vocals + 跑 prepare_dataset)
+
+v0.5.7:
+- acestep_dataset_export: metadata.csv → ACE-Step sidecar 格式 (.lyrics.txt/.caption.txt/.json) +
+  自动放到 ACE-Step-1.5/datasets/ 内部目录绕 safe_path 检查
 """

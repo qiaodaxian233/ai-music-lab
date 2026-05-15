@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## v0.5.7 — LoRA 训练最后一公里:ACE-Step sidecar 导出 (2026-05-15)
+
+**用户撞坑**:`datasets/saya/metadata.csv` 在 ACE-Step "数据集构建" Tab 直接被拒,因为:
+1. ACE-Step 要的不是我们的 CSV,而是**每首一组 sidecar 文件**(`<stem>.lyrics.txt` / `<stem>.caption.txt` / `<stem>.json`)
+2. 还有 safe_path 检查,外部路径(`ai-music-lab/datasets/`)被 reject
+
+v0.5.6.2 解决了 #2(建 junction alias),但 #1 还差临门一脚。v0.5.7 补上。
+
+**新增**
+
+- `lib/acestep_dataset_export.py` — 一次转换 datasets/<name>/ → ACE-Step sidecar 格式
+  - 读 `metadata.csv` + `audio/`
+  - 每首产出 `<stem>.wav` + `.lyrics.txt` + `.caption.txt` + `.json`
+  - 默认输出到 `ACE-Step-1.5/datasets/<name>-acestep/`(在 ACE-Step 内部,safe_path 通过)
+  - 留 `_export_report.txt` 排查日志(导出多少、跳过哪些、警告)
+- LoRA 训练数据 Tab 底部加「📤 导出到 ACE-Step」区
+  - lyrics 来源三选一:`empty`(训纯音色)/ `from_caption`(占位)/ `from_lrc`(从 .lrc 剥时间戳)
+  - 覆盖已有输出 checkbox
+- CLI:`python -m lib.acestep_dataset_export datasets/saya --lyrics-mode empty --overwrite`
+- `tests/test_acestep_dataset_export.py` — 8 个测试覆盖:空 lyrics / from_lrc / safe_path 拒绝 / overwrite / 缺失音频跳过 / hardlink fallback / CLI / 元数据 strip
+
+**用户流程**(saya 数据集)
+
+1. LoRA 训练数据 Tab → 选 saya → lyrics 选 `empty` → 📤 导出
+2. 复制状态框里那条路径(`E:\...\ACE-Step-1.5\datasets\saya-acestep`)
+3. ACE-Step :7860 → 数据集构建 Tab → 粘进去 → 跑预处理 → 出 `.pt`
+4. 训练 Tab → 张量目录填 `.pt` 那目录 → 开练
+
+**文件改动**
+
+- 新增:`lib/acestep_dataset_export.py`、`tests/test_acestep_dataset_export.py`
+- 修改:`lib/__init__.py`、`scripts/unified-ui.py`、`CHANGELOG.md`、`项目对接记忆.md`
+
+---
+
 ## v0.5.6.2 — 自动建 ACE-Step alias (绕过 unsafe path) (2026-05-15)
 
 **用户撞坑**: 在 ACE-Step "数据集构建" / "训练 LoRA" Tab 填我们 `ai-music-lab\datasets\saya` 路径 → `Rejected unsafe dataset path / directory path`。

@@ -26,6 +26,7 @@ import gradio as gr
 
 from lib import (
     ace_step_api,
+    acestep_dataset_export,
     audio_highlight,
     audio_to_midi,
     batch_gen,
@@ -281,6 +282,54 @@ def l_save_captions(project_name: str, table_data):
     except Exception as e:
         return f"❌ 写 CSV 失败: {e}"
     return f"✓ 已保存 {updated}/{len(captions)} 条 caption 到 {csv_path}"
+
+
+def l_export_acestep(project_name: str, lyrics_mode: str, overwrite: bool):
+    """v0.5.7: 把 datasets/<name>/ 转成 ACE-Step sidecar 格式,放到 ACE-Step 内部目录。"""
+    project_name = (project_name or "").strip()
+    if not project_name:
+        return "⚠ 请先选数据集"
+
+    src = DATASETS_DIR / project_name
+    if not src.exists():
+        return f"❌ 找不到 {src}"
+
+    # 自动定位 ACE-Step root(支持 alias / junction / symlink)
+    ace_candidates = [
+        ROOT / "ACE-Step-1.5",
+        ROOT.parent / "ACE-Step-1.5",
+    ]
+    ace_root = next((p for p in ace_candidates if p.exists()), None)
+    if ace_root is None:
+        return (
+            "❌ 找不到 ACE-Step-1.5 目录\n"
+            f"试过: {[str(p) for p in ace_candidates]}\n"
+            "如果 ACE-Step 装在别处,先在仓库根建 junction:\n"
+            "  mklink /J ACE-Step-1.5 D:\\path\\to\\ACE-Step-1.5"
+        )
+
+    try:
+        out, n = acestep_dataset_export.export_to_acestep(
+            source_dir=src,
+            acestep_root=ace_root,
+            lyrics_mode=lyrics_mode,
+            link_mode="copy",  # 最稳。NTFS 同盘可改 hardlink 省空间
+            overwrite=overwrite,
+        )
+    except FileExistsError as e:
+        return f"⚠ 输出目录已存在且非空: {e}\n勾上'覆盖已有'再试。"
+    except Exception as e:
+        return f"❌ 导出失败: {e}\n\n{traceback.format_exc()}"
+
+    return (
+        f"✅ 导出成功:{n} 首\n"
+        f"📁 ACE-Step 路径(复制粘贴到 ACE-Step 数据集构建 Tab):\n"
+        f"   {out}\n\n"
+        f"下一步:\n"
+        f"  1. ACE-Step :7860 → 数据集构建 Tab\n"
+        f"  2. 数据集路径粘上面那条 → 跑预处理 → 出 .pt 张量\n"
+        f"  3. 训练 Tab → 张量目录填 .pt 那目录 → 开练"
+    )
 
 
 def l_quick_import(files, dataset_name, mode, target_sr, target_channels,
@@ -1449,6 +1498,32 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
             l_create_btn.click(l_create_project, [l_new_box], [l_status, l_dropdown])
             l_analyze_btn.click(l_analyze, [l_dropdown, l_sr, l_ch], [l_status, l_table])
             l_save_btn.click(l_save_captions, [l_dropdown, l_table], [l_save_status])
+
+            # ─── v0.5.7: 导出到 ACE-Step 训练格式 ───
+            gr.Markdown("---")
+            gr.Markdown("### 📤 导出到 ACE-Step 训练格式 (v0.5.7)")
+            gr.Markdown(
+                "现有 `metadata.csv` → ACE-Step 期望的 sidecar 文件(每首 3 个 .txt/.json),"
+                "输出到 `ACE-Step-1.5/datasets/<名字>-acestep/`,过 ACE-Step 的 safe_path 检查。"
+            )
+            with gr.Row():
+                l_export_lyrics_mode = gr.Radio(
+                    label="lyrics.txt 来源",
+                    choices=[
+                        ("空(训纯音色/风格 LoRA 推荐)", "empty"),
+                        ("从 caption 占位", "from_caption"),
+                        ("从 .lrc(放 datasets/<名字>/lyrics/<stem>.lrc)", "from_lrc"),
+                    ],
+                    value="empty",
+                )
+                l_export_overwrite = gr.Checkbox(label="覆盖已有输出", value=True)
+            l_export_btn = gr.Button("📤 导出到 ACE-Step", variant="primary", size="lg")
+            l_export_status = gr.Textbox(label="结果", lines=8, interactive=False)
+            l_export_btn.click(
+                l_export_acestep,
+                [l_dropdown, l_export_lyrics_mode, l_export_overwrite],
+                [l_export_status],
+            )
 
         # ─── Tab 3: Song → DAW Export ───
         with gr.TabItem("🎹 Song → DAW Export"):
