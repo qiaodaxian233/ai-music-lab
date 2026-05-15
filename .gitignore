@@ -29,6 +29,9 @@ datasets/
 .env
 *.local
 
+# 总控台运行时(v0.5.3) PID/日志
+runtime/
+
 # OS
 .DS_Store
 Thumbs.db

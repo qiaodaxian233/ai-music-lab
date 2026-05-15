@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## v0.5.3 — 总控台 (端口 7862,启停 + 监控 3 个服务) (2026-05-15)
+
+补一个**更高一层的总控**:启停 + 监控 ACE-Step 主 UI / 统一控制台 / 后处理 watcher 三个常驻服务,看 GPU/磁盘状态,看最近输出,看实时日志。
+
+跟统一控制台的区别:
+- **7861 统一控制台** = 12 Tab 的**功能集合**(生成/管理/导出)
+- **7862 总控台** = 启停/监控其它进程的**运维面板**
+
+### 🎵 新增
+
+- **`scripts/lab-manager.py`** (端口 7862) — Gradio 总控,自动 3s 刷新
+- **`lib/process_manager.py`** — 跨平台 (Win/Linux/Mac) 子进程启停 + psutil 进程树 kill + 端口监听检测 + GPU 状态(nvidia-smi) + 磁盘占用
+- **`start-manager.bat`** — Windows 启动器(端口 7862,跟 7860/7861 互不干扰)
+
+### 🚦 总控台 UI 区块
+
+| 区块 | 内容 |
+|---|---|
+| 🚦 服务控制 | 三个卡片(ACE-Step / 统一控制台 / watcher),每个有 启动/停止/重启 + 状态徽章 + 浏览器跳转链接 |
+| 📊 系统状态 | GPU 显存条 + util%、磁盘占用、outputs/ 体积、LoRA 个数、Python/ACE-Step 装机情况 |
+| 📂 最近输出 | outputs/ 下最近 10 个改动文件 + 大小 + 何时改的 |
+| 📜 日志 | 选服务看最近 200 行日志,可清空 |
+| 🔄 自动刷新 | gr.Timer 3 秒拉一次(可关) |
+
+### 🔧 设计要点
+
+- **PID 文件 + psutil 双重判定**: `runtime/<key>.pid` 保留 PID,但**真正状态判断**用 psutil.pid_exists() + 端口 listen 检测(socket.create_connection)。这样即使 PID 文件没了/孤儿,只要端口在用,也能感知到运行中。
+- **kill 进程树**: ACE-Step 通过 `cmd /c start_gradio_ui.bat` 启动,实际 Python 是孙子进程,直接 kill PID 杀不干净。用 `psutil.Process.children(recursive=True)` 拿整棵树,先 terminate 3s 再 kill。
+- **隐藏 cmd 窗口**: Windows 用 `CREATE_NO_WINDOW (0x08000000)` 让服务后台跑,日志重定向到 `runtime/<key>.log`,在总控 UI 里看。
+
+### 📁 文件改动
+
+- 新增: `scripts/lab-manager.py`(333 行)、`lib/process_manager.py`(405 行)、`start-manager.bat`
+- 修改: `requirements.txt`(加 psutil)、`README.md`、`CHANGELOG.md`、`项目对接记忆.md`、`lib/__init__.py`
+
+---
+
 ## v0.5.2 — 4 个高性价比补充功能 (2026-05-15)
 
 按"发歌前最常用的工具"角度补 4 个,每个都在 1 小时内完工,无重依赖。

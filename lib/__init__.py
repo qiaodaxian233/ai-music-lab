@@ -21,4 +21,7 @@ v0.5.2:
 - lora_merge:     LoRA .safetensors 线性融合
 - audio_highlight: chroma 自相似找 chorus,切 30s + 淡入淡出
 - pinyin_tools:   中文歌词 → 拼音 (训中文 LoRA 必备)
+
+v0.5.3:
+- process_manager: 启停 + 监控 ACE-Step/统一控制台/watcher,跨平台 psutil
 """

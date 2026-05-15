@@ -27,6 +27,9 @@ pypinyin>=0.49
 # LoRA 权重融合 (v0.5.2 #B) - safetensors 读写
 safetensors>=0.4
 
+# 服务进程管理 (v0.5.3) - 总控台用,跨平台找子进程
+psutil>=5.9
+
 # 可选 (按需自己装,默认不装,装上才能用对应高精度模式):
 # diffusers>=0.27 transformers>=4.40 accelerate>=0.30   # SDXL 封面 (#9 sdxl 模式, ~6GB 模型 + 6-8GB VRAM)
 # openai-whisper>=20231117                              # LRC 强制对齐 (#10 whisper 模式, ~1-2GB 模型)
