@@ -4,19 +4,72 @@
   1. (可选) Demucs 拆 vocals stem,只留人声(训音色 / 翻唱用)
   2. 复制到 datasets/<项目>/raw/
   3. 跑 training_data.prepare_dataset() 出 metadata.csv
+  4. 在 ACE-Step-1.5/datasets/<项目>/ 建 junction/symlink (v0.5.6.2),
+     让 ACE-Step 的"unsafe path"检查通过
 
 输出: datasets/<项目>/
   ├── raw/                  ← 处理后的训练源文件(vocals 或原混合)
   ├── audio/                ← 重采样统一格式后的训练音频 (prepare_dataset 写)
   ├── metadata.csv          ← caption / BPM / key / 路径
   └── _tmp_stems/           ← Demucs 临时(处理完自动删)
+
+ACE-Step alias: ACE-Step-1.5/datasets/<项目> 指向上面 (junction/symlink)
 """
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parent.parent
 DATASETS_DIR = ROOT / "datasets"
+ACE_STEP_DIR = ROOT / "ACE-Step-1.5"
+
+
+def make_acestep_alias(dataset_dir: Path) -> dict:
+    """在 ACE-Step-1.5/datasets/<name> 建 junction(Win) / symlink(POSIX) 指向 dataset_dir.
+
+    ACE-Step 的 path 安全检查要求训练数据在它自己的目录树内。我们的 datasets/
+    在外面被拒,所以建个 alias 让它看见。
+
+    返回 {ok, link_path, mode, error}
+      mode: 'junction' (Windows) | 'symlink' (POSIX) | 'exists' | 'failed'
+    """
+    if not ACE_STEP_DIR.exists():
+        return {"ok": False, "link_path": None, "mode": "no-ace-step",
+                "error": "ACE-Step-1.5 未安装(预期路径 " + str(ACE_STEP_DIR) + ")"}
+
+    ace_datasets = ACE_STEP_DIR / "datasets"
+    ace_datasets.mkdir(parents=True, exist_ok=True)
+
+    link_path = ace_datasets / dataset_dir.name
+
+    # 已存在
+    if link_path.exists() or link_path.is_symlink():
+        return {"ok": True, "link_path": link_path, "mode": "exists", "error": None}
+
+    try:
+        if sys.platform.startswith("win"):
+            # mklink /J 建 junction, 无需管理员
+            r = subprocess.run(
+                ["cmd", "/c", "mklink", "/J",
+                 str(link_path), str(dataset_dir.resolve())],
+                capture_output=True, text=True, check=False,
+            )
+            if r.returncode != 0:
+                return {"ok": False, "link_path": None, "mode": "failed",
+                        "error": (r.stderr or r.stdout or "mklink 失败").strip()}
+            return {"ok": True, "link_path": link_path, "mode": "junction",
+                    "error": None}
+        else:
+            os.symlink(dataset_dir.resolve(), link_path,
+                       target_is_directory=True)
+            return {"ok": True, "link_path": link_path, "mode": "symlink",
+                    "error": None}
+    except Exception as e:
+        return {"ok": False, "link_path": None, "mode": "failed",
+                "error": str(e)}
 
 
 def quick_import(
@@ -169,4 +222,13 @@ def quick_import(
         "mode_used": mode,
         "errors": errors,
         "prepare_result": prep,
+        "acestep_alias": _make_alias_safe(dataset_dir),
     }
+
+
+def _make_alias_safe(dataset_dir: Path) -> dict:
+    """安全包装 make_acestep_alias, 任何异常都不传播。"""
+    try:
+        return make_acestep_alias(dataset_dir)
+    except Exception as e:
+        return {"ok": False, "link_path": None, "mode": "exception", "error": str(e)}

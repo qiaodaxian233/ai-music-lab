@@ -322,6 +322,27 @@ def l_quick_import(files, dataset_name, mode, target_sr, target_channels,
         if prep:
             lines.append(f"  prepare: 处理 {prep.get('succeeded', '?')}/{prep.get('total', '?')} 首")
             lines.append(f"  metadata.csv: {r['dataset_dir']}/metadata.csv")
+
+        # ACE-Step alias 提示
+        alias = r.get("acestep_alias") or {}
+        if alias.get("ok") and alias.get("link_path"):
+            lines.append("")
+            lines.append(f"🔗 ACE-Step 可用路径(填到 ACE-Step 数据集构建 Tab):")
+            lines.append(f"    {alias['link_path']}")
+            if alias.get("mode") == "junction":
+                lines.append("    (Windows junction,零磁盘占用)")
+            elif alias.get("mode") == "symlink":
+                lines.append("    (POSIX symlink)")
+            elif alias.get("mode") == "exists":
+                lines.append("    (alias 已存在,沿用)")
+        elif alias.get("mode") == "no-ace-step":
+            lines.append("")
+            lines.append("⚠ 没找到 ACE-Step-1.5/,跳过建 alias")
+        elif alias.get("error"):
+            lines.append("")
+            lines.append(f"⚠ 建 ACE-Step alias 失败: {alias['error']}")
+            lines.append("    手动跑: mklink /J \"ACE-Step-1.5\\datasets\\" + (dataset_name or "<name>") + "\" \"" + str(r['dataset_dir']) + "\"")
+
         lines.append("")
         lines.append("→ 下方表格已自动加载,编辑 caption → 点'💾 保存',再去 ACE-Step UI 训")
     else:

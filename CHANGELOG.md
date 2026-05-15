@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## v0.5.6.2 — 自动建 ACE-Step alias (绕过 unsafe path) (2026-05-15)
+
+**用户撞坑**: 在 ACE-Step "数据集构建" / "训练 LoRA" Tab 填我们 `ai-music-lab\datasets\saya` 路径 → `Rejected unsafe dataset path / directory path`。
+
+**根因**: ACE-Step 的安全策略只允许 `ACE-Step-1.5\` 目录树内的路径,我们的数据集在外面被拒。
+
+**修复**: `lora_dataset_builder.quick_import` 跑完自动建一个 alias:
+- Windows: `mklink /J ACE-Step-1.5\datasets\<name> ai-music-lab\datasets\<name>` (junction, 无需管理员)
+- Linux / Mac: `os.symlink(...)` (symlink)
+
+零磁盘占用,数据还在 `ai-music-lab\datasets\` 原地。ACE-Step 看见的是它自己目录树内的路径,过安全检查。
+
+UI 进度框现在会打印 ACE-Step 可用的那条路径,直接复制粘贴。
+
+### 🐛 修给已有数据集(老用户)
+
+如果你已经建过数据集(像截图里的 `saya`),不想等新版自动建,手动跑(无需管理员):
+
+```cmd
+cd E:\jiaoben\ai-music-lab
+if not exist "ACE-Step-1.5\datasets" mkdir "ACE-Step-1.5\datasets"
+mklink /J "ACE-Step-1.5\datasets\saya" "datasets\saya"
+```
+
+然后 ACE-Step 那 Tab 填 `E:\jiaoben\ai-music-lab\ACE-Step-1.5\datasets\saya` 就过了。
+
+### 📁 文件改动
+
+- 修改: `lib/lora_dataset_builder.py`(加 `make_acestep_alias()` + quick_import 返回里加 `acestep_alias`)
+- 修改: `scripts/unified-ui.py`(`l_quick_import` 进度框打印 alias 路径)
+- 修改: `CHANGELOG.md` + `项目对接记忆.md`
+
+---
+
 ## v0.5.6.1 — 一键导入跑完自动填表格 (2026-05-15)
 
 **hotfix**: 用户反馈"一键处理完不知道结果去哪了" — 实际数据生成正常(在 `datasets/<项目>/`),但 UI 没自动刷下面的表格,要再点一次「🔍 分析并准备训练集」才看得到 caption 表。
