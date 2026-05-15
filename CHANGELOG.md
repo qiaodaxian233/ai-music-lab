@@ -1,5 +1,60 @@
 # CHANGELOG
 
+## v0.5.5 — 全 Tab 支持外部音频 + 一键 MIDI 加 split 分轨模式 (2026-05-15)
+
+两块改动:
+1. 之前只有「🎼 一键 MIDI」能拖外部音频。这版**所有处理音频的 Tab 都加上传入口**(Suno / Udio mp3 拖进去就跑)。
+2. 「🎼 一键 MIDI」加 **`split` 模式**:Demucs 拆 6 stem 后每个 stem 单独出 MIDI,导 DAW 后每条轨能挂不同 VST。
+
+### 🎵 改动 A: 全 Tab 加上传入口
+
+| Tab | 现在能处理 Suno/Udio 等外部音频吗 |
+|---|---|
+| 🎹 Song → DAW Export | ✅ (拆 stem + MIDI + Reaper 工程) |
+| 🎨 封面 & 字幕 | ✅ (PIL/SDXL 封面 + LRC 字幕) |
+| 🔁 续写 / 翻唱 | ✅ (ACE-Step audio2audio 接任意源) |
+| 📦 发行打包 | ✅ (含外部音频一键 zip / 自动剪短版) |
+| 🎼 一键 MIDI | ✅ (本来就有) |
+
+UI 用 `gr.Accordion("📤 或上传外部音频", open=False)` 折叠,默认收起不挤占界面。
+新工具函数 `_resolve_audio(song_rel, uploaded)` 统一解析音频源,**上传优先于下拉**。
+
+### 🎵 改动 B: 一键 MIDI 加 split 分轨
+
+**问题**: 默认 `melodic` 模式把整曲送 Basic Pitch,**所有乐器混到一个 track**——导 DAW 只能挂一个 VST。
+
+**解决**: 加 `mode='split'`,跑 Demucs 6-stem 分离后,每个 stem 单独跑 Basic Pitch / 鼓 onset。
+
+| mode | 速度 | 输出 |
+|---|---|---|
+| `melodic`(默认) | ~10s | 1 个 melodic.mid(混合) |
+| `drums` | ~5s | 1 个 drums.mid |
+| `both` | ~15s | melodic + drums |
+| **`split`(新)** | **~1-3 分钟** | **6 个 mid: bass / vocals / guitar / piano / other / drums** |
+
+`outputs/midi/<歌名>/_stems/` 同时保留 Demucs 分离出的 wav,想清掉手动删。
+
+### 🔧 设计要点
+
+- `lib/audio_to_midi.quick_transcribe` 加 `'split'` 模式分支,复用 `lib/stem_separation.separate_song()` + `transcribe_melodic` + `transcribe_drums`
+- 重构 result finalize 逻辑成独立 `_finalize_result()` 函数,split 路径也能用
+- UI 报告区遇到 stem 字典时展开每个 stem 的音符数 / kick-snare-hh 统计
+- Sandbox mock 测试 split 路径,6 stem 全 ok ✓
+
+### 📁 文件改动
+
+- 修改: `lib/audio_to_midi.py`(327 → 373 行,新增 split 分支 + `_finalize_result`)
+- 修改: `scripts/unified-ui.py`(1903 → 1946 行,7 handler + 4 Tab + qm_run 报告扩展 + split radio 选项)
+- 修改: `CHANGELOG.md` + `项目对接记忆.md`
+
+### 实测
+
+- Gradio 6.14 + Python 3.12 装配 + launch 全通过,零 deprecation
+- _resolve_audio: 4 场景全对 ✓
+- split 模式: mock Demucs 后 6 stem 全出 MIDI ✓
+
+---
+
 ## v0.5.4 — Gradio 6.0 兼容 hotfix (2026-05-15)
 
 用户在 Win 上跑 v0.5.3 总控台,撞了 Gradio 6.0 + .bat 编码两个坑,一并修。

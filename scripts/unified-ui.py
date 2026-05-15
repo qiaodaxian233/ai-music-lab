@@ -280,6 +280,24 @@ def _safe_project_name(s: str) -> str:
     return safe.strip("_") or "untitled"
 
 
+def _resolve_audio(song_rel: str, uploaded_path):
+    """v0.5.5: 统一解析音频源。上传优先,否则 outputs/ 下拉。
+
+    返回 (Path or None, 来源描述字符串)。
+    外部上传(Suno / Udio / 任意 mp3 / wav)走 uploaded_path,
+    OUTPUTS_DIR 下的歌走 song_rel。
+    """
+    if uploaded_path:
+        p = Path(uploaded_path)
+        if p.exists():
+            return p, f"📤 上传: {p.name}"
+    if song_rel:
+        p = ROOT / song_rel
+        if p.exists():
+            return p, f"📂 outputs/: {song_rel}"
+    return None, ""
+
+
 def _daw_readme_text(name, bpm, duration, markers, stems, midi_files):
     lines = [
         f"# {name}",
@@ -315,9 +333,10 @@ def d_use_history_selection(selected_rel: str):
     return gr.update(value=selected_rel), f"✓ 已选: {selected_rel}"
 
 
-def d_process(song_path, do_midi, project_name, progress=gr.Progress()):
-    if not song_path:
-        return "⚠ 没选歌", ""
+def d_process(song_path, uploaded, do_midi, project_name, progress=gr.Progress()):
+    src, src_label = _resolve_audio(song_path, uploaded)
+    if not src:
+        return "⚠ 没选 outputs/ 里的歌, 也没上传", ""
 
     log = []
     def L(m):
@@ -325,7 +344,6 @@ def d_process(song_path, do_midi, project_name, progress=gr.Progress()):
         return "\n".join(log)
 
     try:
-        src = ROOT / song_path
         if not src.exists():
             return f"❌ 找不到文件: {src}", L(f"❌ {src}")
 
@@ -741,12 +759,10 @@ def cv_song_choices():
     return _list_outputs_songs()
 
 
-def cv_make_cover(song_rel, title, subtitle, mode, sdxl_prompt, embed_mp3):
-    if not song_rel:
-        return None, "⚠ 选一首歌"
-    audio = ROOT / song_rel
-    if not audio.exists():
-        return None, f"❌ 找不到 {audio}"
+def cv_make_cover(song_rel, uploaded, title, subtitle, mode, sdxl_prompt, embed_mp3):
+    audio, _src = _resolve_audio(song_rel, uploaded)
+    if not audio:
+        return None, "⚠ 选一首歌或上传"
 
     title = (title or audio.stem).strip()
     try:
@@ -775,12 +791,10 @@ def cv_make_cover(song_rel, title, subtitle, mode, sdxl_prompt, embed_mp3):
     return str(cover_path), msg
 
 
-def cv_make_lrc(song_rel, lyrics_override, mode, intro_offset, title, artist):
-    if not song_rel:
-        return None, "⚠ 选一首歌"
-    audio = ROOT / song_rel
-    if not audio.exists():
-        return None, f"❌ 找不到 {audio}"
+def cv_make_lrc(song_rel, uploaded, lyrics_override, mode, intro_offset, title, artist):
+    audio, _src = _resolve_audio(song_rel, uploaded)
+    if not audio:
+        return None, "⚠ 选一首歌或上传"
 
     # 优先用 override,否则从历史索引拿
     lyrics = (lyrics_override or "").strip()
@@ -822,12 +836,10 @@ def rv_song_choices():
     return _list_outputs_songs()
 
 
-def rv_extend(song_rel, seconds, direction, prompt, lyrics, seed, progress=gr.Progress()):
-    if not song_rel:
-        return None, "⚠ 选一首歌"
-    src = ROOT / song_rel
-    if not src.exists():
-        return None, f"❌ 找不到 {src}"
+def rv_extend(song_rel, uploaded, seconds, direction, prompt, lyrics, seed, progress=gr.Progress()):
+    src, _label = _resolve_audio(song_rel, uploaded)
+    if not src:
+        return None, "⚠ 选一首歌或上传"
 
     progress(0.1, desc="加载 ACE-Step pipeline (首次较慢)…")
     out = OUTPUTS_DIR / f"{src.stem}_ext{int(seconds)}s.wav"
@@ -847,14 +859,12 @@ def rv_extend(song_rel, seconds, direction, prompt, lyrics, seed, progress=gr.Pr
         return None, f"❌ {e}"
 
 
-def rv_cover(song_rel, new_prompt, new_lyrics, ref_strength, seed, progress=gr.Progress()):
-    if not song_rel:
-        return None, "⚠ 选一首歌"
+def rv_cover(song_rel, uploaded, new_prompt, new_lyrics, ref_strength, seed, progress=gr.Progress()):
     if not (new_prompt or "").strip():
         return None, "⚠ 必须填新风格 prompt"
-    src = ROOT / song_rel
-    if not src.exists():
-        return None, f"❌ 找不到 {src}"
+    src, _label = _resolve_audio(song_rel, uploaded)
+    if not src:
+        return None, "⚠ 选一首歌或上传"
 
     progress(0.1, desc="加载 ACE-Step pipeline…")
     out = OUTPUTS_DIR / f"{src.stem}_cover.wav"
@@ -924,6 +934,16 @@ def qm_run(song_rel, mode, with_bpm, with_markers, embed_meta, progress=gr.Progr
         d = report["drums"]
         lines.append(f"  drums:   kick={d['kicks']} snare={d['snares']} hh={d['hihats']}"
                      if d["ok"] else f"  drums 失败: {d['error']}")
+    if report.get("stems"):
+        lines.append(f"  📤 分轨 ({len(report['stems'])} 个 stem):")
+        for stem_name, r in report["stems"].items():
+            if r["ok"]:
+                if stem_name == "drums":
+                    lines.append(f"    {stem_name:8} kick={r['kicks']} snare={r['snares']} hh={r['hihats']}")
+                else:
+                    lines.append(f"    {stem_name:8} {r['notes']} 个音符")
+            else:
+                lines.append(f"    {stem_name:8} ❌ {r['error']}")
     if report["markers"]:
         lines.append(f"  段落 marker: {len(report['markers'])} 个 ({report['markers'][0]['name']} … {report['markers'][-1]['name']})")
     if report["errors"]:
@@ -971,6 +991,16 @@ def qm_run_upload(uploaded_file, mode, with_bpm, with_markers, embed_meta, progr
         d = report["drums"]
         lines.append(f"  drums:   kick={d['kicks']} snare={d['snares']} hh={d['hihats']}"
                      if d["ok"] else f"  drums 失败: {d['error']}")
+    if report.get("stems"):
+        lines.append(f"  📤 分轨 ({len(report['stems'])} 个 stem):")
+        for stem_name, r in report["stems"].items():
+            if r["ok"]:
+                if stem_name == "drums":
+                    lines.append(f"    {stem_name:8} kick={r['kicks']} snare={r['snares']} hh={r['hihats']}")
+                else:
+                    lines.append(f"    {stem_name:8} {r['notes']} 个音符")
+            else:
+                lines.append(f"    {stem_name:8} ❌ {r['error']}")
     if report["markers"]:
         lines.append(f"  段落 marker: {len(report['markers'])} 个")
     return mid, bpm_file, markers_file, "\n".join(lines)
@@ -984,13 +1014,11 @@ def pk_song_choices():
     return _list_outputs_songs()
 
 
-def pk_build(song_rel, mp3, cover, lrc, midi, metadata, cover_mode,
+def pk_build(song_rel, uploaded, mp3, cover, lrc, midi, metadata, cover_mode,
              progress=gr.Progress()):
-    if not song_rel:
-        return None, "⚠ 选一首歌"
-    audio = ROOT / song_rel
-    if not audio.exists():
-        return None, f"❌ 找不到 {audio}"
+    audio, _label = _resolve_audio(song_rel, uploaded)
+    if not audio:
+        return None, "⚠ 选一首歌或上传"
 
     def cb(i, total, msg):
         progress(i / total, desc=msg)
@@ -1020,13 +1048,11 @@ def pk_build(song_rel, mp3, cover, lrc, midi, metadata, cover_mode,
     return str(r["zip_path"]), "\n".join(lines)
 
 
-def pk_highlight(song_rel, target_sec, strategy, fade_in, fade_out,
+def pk_highlight(song_rel, uploaded, target_sec, strategy, fade_in, fade_out,
                  progress=gr.Progress()):
-    if not song_rel:
-        return None, "⚠ 选一首歌"
-    audio = ROOT / song_rel
-    if not audio.exists():
-        return None, f"❌ 找不到 {audio}"
+    audio, _label = _resolve_audio(song_rel, uploaded)
+    if not audio:
+        return None, "⚠ 选一首歌或上传"
 
     progress(0.1, desc="加载音频…")
     try:
@@ -1287,6 +1313,10 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
                         value=True,
                     )
 
+            with gr.Accordion("📤 或上传外部音频 (Suno / Udio / 任意 mp3 wav flac)", open=False):
+                d_upload = gr.File(label="拖音频进来 (上传优先于上面下拉)",
+                                   file_types=["audio"], type="filepath")
+
             d_go_btn = gr.Button("🚀 开始处理", variant="primary", size="lg")
             d_result = gr.Textbox(label="结果", lines=3, interactive=False)
             d_log = gr.Textbox(label="过程日志", lines=20, interactive=False)
@@ -1296,7 +1326,7 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
             d_use_history_btn.click(d_use_history_selection,
                                     [selected_song], [d_dropdown, d_log])
             d_go_btn.click(d_process,
-                           [d_dropdown, d_do_midi, d_project_name],
+                           [d_dropdown, d_upload, d_do_midi, d_project_name],
                            [d_result, d_log])
 
             gr.Markdown("""
@@ -1637,6 +1667,10 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
                 cv_refresh_btn = gr.Button("🔄", size="sm")
                 cv_use_hist = gr.Button("⬅ 用历史 Tab 选中的歌", size="sm")
 
+            with gr.Accordion("📤 或上传外部音频 (Suno / Udio / 任意 mp3 wav flac)", open=False):
+                cv_upload = gr.File(label="拖音频进来 (上传优先于上面下拉)",
+                                    file_types=["audio"], type="filepath")
+
             with gr.Row():
                 # 封面侧
                 with gr.Column():
@@ -1684,12 +1718,12 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
             )
             cv_make_cover_btn.click(
                 cv_make_cover,
-                [cv_song, cv_title, cv_subtitle, cv_mode, cv_sdxl_prompt, cv_embed],
+                [cv_song, cv_upload, cv_title, cv_subtitle, cv_mode, cv_sdxl_prompt, cv_embed],
                 [cv_cover_img, cv_cover_status],
             )
             cv_make_lrc_btn.click(
                 cv_make_lrc,
-                [cv_song, cv_lrc_lyrics, cv_lrc_mode, cv_lrc_intro,
+                [cv_song, cv_upload, cv_lrc_lyrics, cv_lrc_mode, cv_lrc_intro,
                  cv_lrc_title, cv_lrc_artist],
                 [cv_lrc_file, cv_lrc_status],
             )
@@ -1708,6 +1742,10 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
                                       choices=rv_song_choices(), interactive=True)
                 rv_refresh_btn = gr.Button("🔄", size="sm")
                 rv_use_hist = gr.Button("⬅ 用历史 Tab 选中的歌", size="sm")
+
+            with gr.Accordion("📤 或上传外部音频 (Suno / Udio / 任意 mp3 wav flac)", open=False):
+                rv_upload = gr.File(label="拖音频进来 (上传优先于上面下拉)",
+                                    file_types=["audio"], type="filepath")
 
             with gr.Tabs():
                 # 续写
@@ -1747,29 +1785,30 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
             )
             ext_btn.click(
                 rv_extend,
-                [rv_song, ext_seconds, ext_dir, ext_prompt, ext_lyrics, ext_seed],
+                [rv_song, rv_upload, ext_seconds, ext_dir, ext_prompt, ext_lyrics, ext_seed],
                 [ext_audio, ext_status],
             )
             cov_btn.click(
                 rv_cover,
-                [rv_song, cov_prompt, cov_lyrics, cov_strength, cov_seed],
+                [rv_song, rv_upload, cov_prompt, cov_lyrics, cov_strength, cov_seed],
                 [cov_audio, cov_status],
             )
 
         # ─── Tab 11: 一键转 MIDI (v0.5.1) ───
         with gr.TabItem("🎼 一键 MIDI"):
             gr.Markdown("""
-**整曲音频直接出 MIDI**,跳过 stem 分离(比 Song→DAW 快 10×)。
-同时检测 BPM + 段落 marker,可嵌入到 .mid 里(DAW 能直接读)。
+**整曲音频 → MIDI + BPM + 段落 marker**
 
-**输出**: `outputs/midi/<歌名>/melodic.mid` + `bpm.txt` + `markers.txt`
+**输出**: `outputs/midi/<歌名>/`
 
 **模式**:
-- `melodic` (默认): Basic Pitch 抓主旋律 → 单乐器 MIDI,人声/钢琴/单音乐器最准
-- `drums`: 简单 onset 分类成 kick/snare/hh,4/4 流行鼓还行
-- `both`: 同时跑,出两个 .mid
+- `melodic` (默认,快 ~10s): Basic Pitch 抓主旋律 → **1 个 melodic.mid**(所有乐器混一起)
+- `drums` (快): onset 分类成 kick/snare/hh → 1 个 drums.mid
+- `both` (快): melodic + drums 两个 mid
+- `split` (慢 ~1-3 分钟,**推荐想分轨导 DAW 用**):
+  Demucs 先拆 6 stem,每个 stem 单独出 MIDI → **6 个 mid**(bass / vocals / guitar / piano / other / drums),导 DAW 后每条轨挂不同 VST
 
-**首次跑下 Basic Pitch (~150MB),之后秒级。**
+**首次跑**: Basic Pitch ~150MB(melodic/both),Demucs ~5GB(split)。
 """)
             with gr.Row():
                 with gr.Column(scale=2):
@@ -1788,8 +1827,9 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
 
             gr.Markdown("---")
             with gr.Row():
-                qm_mode = gr.Radio(["melodic", "drums", "both"],
-                                   label="转录模式", value="melodic")
+                qm_mode = gr.Radio(["melodic", "drums", "both", "split"],
+                                   label="转录模式", value="melodic",
+                                   info="split = 拆轨 (Demucs, 慢但分乐器), 其它 = 整曲直转 (快)")
                 qm_with_bpm = gr.Checkbox(label="检测 BPM 并写 bpm.txt", value=True)
                 qm_with_markers = gr.Checkbox(label="检测段落 marker 并写 markers.txt",
                                               value=True)
@@ -1836,6 +1876,10 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
                 pk_refresh_btn = gr.Button("🔄", size="sm")
                 pk_use_hist = gr.Button("⬅ 用历史 Tab 选中的歌", size="sm")
 
+            with gr.Accordion("📤 或上传外部音频 (Suno / Udio / 任意 mp3 wav flac)", open=False):
+                pk_upload = gr.File(label="拖音频进来 (上传优先于上面下拉)",
+                                    file_types=["audio"], type="filepath")
+
             with gr.Row():
                 # 打包侧
                 with gr.Column():
@@ -1881,13 +1925,13 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
             )
             pk_build_btn.click(
                 pk_build,
-                [pk_song, pk_inc_mp3, pk_inc_cover, pk_inc_lrc,
+                [pk_song, pk_upload, pk_inc_mp3, pk_inc_cover, pk_inc_lrc,
                  pk_inc_midi, pk_inc_meta, pk_cover_mode],
                 [pk_zip_out, pk_build_status],
             )
             pk_clip_btn.click(
                 pk_highlight,
-                [pk_song, pk_target, pk_strategy, pk_fade_in, pk_fade_out],
+                [pk_song, pk_upload, pk_target, pk_strategy, pk_fade_in, pk_fade_out],
                 [pk_clip_audio, pk_clip_status],
             )
 

@@ -190,18 +190,27 @@ def quick_transcribe(
     audio_path: Path,
     *,
     output_dir: Optional[Path] = None,
-    mode: str = "melodic",   # 'melodic' | 'drums' | 'both'
+    mode: str = "melodic",   # 'melodic' | 'drums' | 'both' | 'split'
     with_bpm: bool = True,
     with_markers: bool = True,
     embed_meta: bool = True,  # 把 BPM/marker 嵌进 .mid 文件本身
 ) -> dict:
-    """整曲音频 → MIDI + BPM + 段落 marker, **跳过 stem 分离**.
+    """整曲音频 → MIDI + BPM + 段落 marker。
+
+    模式:
+      'melodic' (默认,快):  整曲送 Basic Pitch,出 1 个 melodic.mid (主旋律)
+      'drums'   (快):       onset 分类成 kick/snare/hh,出 1 个 drums.mid
+      'both'    (快):       melodic + drums 两个 mid
+      'split'   (慢,精):     Demucs 拆 6 stem 后,每个 stem 一个 mid
+                            (bass / vocals / guitar / piano / other / drums)
+                            首次跑下 ~5GB Demucs 模型,~1-3 分钟/首
 
     输出到 output_dir (默认 outputs/midi/<stem>/):
-      - melodic.mid  (mode='melodic' 或 'both')
-      - drums.mid    (mode='drums'   或 'both')
-      - bpm.txt      (with_bpm=True)
-      - markers.txt  (with_markers=True)
+      - melodic.mid / drums.mid    (mode in melodic/drums/both)
+      - bass.mid / vocals.mid / guitar.mid / piano.mid / other.mid / drums.mid (mode=split)
+      - bpm.txt                    (with_bpm=True)
+      - markers.txt                (with_markers=True)
+      - _stems/                    (mode=split 保留 stem wav, 想清就手动删)
 
     embed_meta=True 会把 BPM 写进 MIDI 的 initial_tempo,把 markers 写成
     pretty_midi 的 lyric/text 事件 (DAW 能读到当作段落 marker).
@@ -214,6 +223,7 @@ def quick_transcribe(
       markers: list,
       melodic: {ok, error, notes} | None,
       drums:   {ok, error, kicks, snares, hihats, total} | None,
+      stems:   {stem_name: {...}} | None,    # split 模式才有
       errors: [str, ...],
     }
     """
@@ -237,6 +247,7 @@ def quick_transcribe(
         "markers": [],
         "melodic": None,
         "drums": None,
+        "stems": None,
         "errors": [],
     }
 
@@ -291,9 +302,45 @@ def quick_transcribe(
         else:
             result["errors"].append(f"drums 失败: {r['error']}")
 
+    # 5. split 模式 (v0.5.6): Demucs 拆 6 stem → 每个 stem 一个 MIDI
+    if mode == "split":
+        result["stems"] = {}
+        try:
+            from lib import stem_separation
+        except ImportError as e:
+            result["errors"].append(f"stem_separation 模块缺: {e}")
+            return _finalize_result(result)
+
+        stems_dir = output_dir / "_stems"
+        sep = stem_separation.separate_song(audio_path, stems_dir)
+        if not sep["ok"]:
+            result["errors"].append(f"Demucs 分离失败: {sep['error']}")
+            return _finalize_result(result)
+
+        bpm = result["bpm"] or 120.0
+        for stem_name, stem_path in sep["stems"].items():
+            midi_out = output_dir / f"{stem_name}.mid"
+            if stem_name == "drums":
+                # 用 onset 检测 (Basic Pitch 不擅长鼓)
+                r = transcribe_drums(stem_path, midi_out, bpm=bpm)
+            else:
+                # bass / vocals / guitar / piano / other 用 Basic Pitch
+                r = transcribe_melodic(stem_path, midi_out)
+            result["stems"][stem_name] = r
+            if r["ok"]:
+                if embed_meta:
+                    _inject_meta_into_midi(midi_out, bpm, result["markers"])
+                result["files"].append(midi_out)
+            else:
+                result["errors"].append(f"{stem_name}.mid 失败: {r['error']}")
+
+    return _finalize_result(result)
+
+
+def _finalize_result(result: dict) -> dict:
     result["ok"] = bool(result["files"]) and not any(
         e for e in result["errors"]
-        if "melodic 失败" in e or "drums 失败" in e
+        if any(kw in e for kw in ["melodic 失败", "drums 失败", "Demucs 分离失败", ".mid 失败"])
     )
     return result
 
