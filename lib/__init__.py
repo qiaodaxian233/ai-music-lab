@@ -5,7 +5,7 @@
 - postprocess: 后处理(响度归一化、ID3 tag、格式转换)
 - training_data: LoRA 训练数据准备(BPM/key 分析、caption、dataset 导出)
 - stem_separation: Demucs 6-stem 分离
-- audio_to_midi: Basic Pitch + 鼓 onset 转 MIDI + quick_transcribe (v0.5.1)
+- audio_to_midi: Basic Pitch + 鼓 onset 转 MIDI + quick_transcribe (v0.5.1, split 模式 v0.5.5)
 - reaper_project: Reaper .rpp 工程生成
 
 v0.5.0:
@@ -24,4 +24,7 @@ v0.5.2:
 
 v0.5.3:
 - process_manager: 启停 + 监控 ACE-Step/统一控制台/watcher,跨平台 psutil
+
+v0.5.6:
+- lora_dataset_builder: 拖音频一键打包训练集 (可选 Demucs 拆 vocals + 跑 prepare_dataset)
 """

@@ -1,5 +1,70 @@
 # CHANGELOG
 
+## v0.5.6 — 一键打包 LoRA 训练集 + caption 模板升级 + 保存 bug 修复 (2026-05-15)
+
+之前训 LoRA 要手动:
+1. 自己 cd 到 `datasets/<项目>/raw/`,把音频复制进去
+2. 如果训人声音色,得自己用 Tab 11 「一键 MIDI split 模式」一首首拆 vocals,再手动搬
+3. 回 Tab 2「LoRA 训练数据」点分析
+
+太麻烦。**v0.5.6 把这堆压到一个按钮**。顺手修了两个老 bug。
+
+### 🎵 新增 (主要)
+
+**Tab 「🎓 LoRA 训练数据」顶部加「🚀 一键导入」区**:
+
+- 多文件上传(`gr.File(file_count="multiple")`):拖一批音频进去
+- 数据集名输入(已存在就追加,不存在就建)
+- 模式 Radio:
+  - **纯人声**:先 Demucs 拆 6 stem → 只留 vocals.wav 入库 → 训人声音色推荐
+  - **完整混合**:不拆,直接复制 → 训整曲风格用
+- 一键执行 → 自动跑完 Demucs(可选)+ `training_data.prepare_dataset()`,出 `metadata.csv`,刷新现有项目下拉
+
+### 🐛 修复 (用户截图反馈)
+
+| 问题 | 原因 | 修复 |
+|---|---|---|
+| caption 模板太基础(只 `"X bpm, key of Y"`) | suggest_caption 不带 placeholder,纯靠 BPM/key 出不来流派/乐器/情绪 | 加 tempo 档位描述符 + `[填: 流派/乐器/情绪/语言]` 占位 + 接受 `mode_hint='vocal_only'` 时前缀 `"solo vocal"` |
+| 点「💾 保存 captions」报错 | Gradio 6.0 Dataframe value 从 list-of-lists 变成 `pandas.DataFrame`,`for row in table_data` 取到列名而不是行 | `l_save_captions` 加 DataFrame 检测,用 `.values.tolist()` 转换;同时兼容 list 形式 |
+
+### 📦 新增 / 修改 lib 模块
+
+- **新 `lib/lora_dataset_builder.py`** — `quick_import(audio_paths, dataset_name, *, mode, ...)`,串好 Demucs → 复制 → prepare_dataset。处理完自动清 `_tmp_stems/` 省磁盘
+- **改 `lib/training_data.py`**:
+  - `suggest_caption()` 加 `mode_hint` 参数 + tempo 档位 + placeholder
+  - `prepare_dataset()` 加 `mode_hint` 透传给 `suggest_caption`
+
+### 🔧 设计要点
+
+- **追加模式**:同名数据集已存在不报错,新文件直接加到 raw/。让用户能分批攒数据。
+- **safe 文件名**:数据集名走 isalnum 过滤,防恶意路径
+- **优雅降级**:`vocal_only` 模式跑前先 `stem_separation.check_demucs()`,没装直接提示走 `full_mix` 而不是中途崩
+- **新 caption 例子**:
+  - `vocal_only` + 中速: `solo vocal, mid-tempo, 92 bpm, key of C, [填: 流派/乐器/情绪/语言]`
+  - `full_mix` + folk + 慢: `indie folk, slow, 65 bpm, key of Am, [填: 流派/乐器/情绪/语言]`
+- **占位符意义**: BPM / key 是音频客观属性,可以自动检测;流派 / 乐器 / 情绪 / 语言要靠人标(自动检测要 CLAP 等模型,太重)。占位符提醒用户"这块你得填"
+
+### 📊 沙箱实测
+
+- vocal_only 模式(mock Demucs):3 个文件 → 3 个 `<name>_vocals.wav` 入 raw/,临时 stem 清干净 ✓
+- full_mix 模式:3 个文件 → 原名直接复制,不碰 Demucs ✓
+- DataFrame save: 模拟 Gradio 6 传 pd.DataFrame → 解析 2 行 + 写 CSV 成功 ✓
+- 新 caption 模板:5 个场景测试全通 ✓
+- Gradio 6.14 装配通过
+
+### 💡 已建过老数据集怎么办
+
+如果你已经跑过分析、看到老 caption("X bpm, key of Y"),在 Tab 里点一下「🔍 分析并准备训练集」会覆盖重跑,拿到新模板。raw 文件不会动,只重写 metadata.csv。
+
+### 📁 文件改动
+
+- 新增: `lib/lora_dataset_builder.py`(~140 行)
+- 修改: `lib/training_data.py`(`suggest_caption` + `prepare_dataset` 加 mode_hint)
+- 修改: `scripts/unified-ui.py`(新 `l_quick_import` handler + UI Accordion + `l_save_captions` DataFrame 兼容)
+- 修改: `CHANGELOG.md` + `项目对接记忆.md` + `lib/__init__.py`
+
+---
+
 ## v0.5.5 — 全 Tab 支持外部音频 + 一键 MIDI 加 split 分轨模式 (2026-05-15)
 
 两块改动:

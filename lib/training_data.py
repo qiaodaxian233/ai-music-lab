@@ -94,10 +94,23 @@ STYLE_KEYWORDS = {
 }
 
 
-def suggest_caption(info: dict, source_filename: str = "") -> str:
-    """从文件名 + 分析结果猜一个起点 caption,你可以再编辑。"""
+def suggest_caption(info: dict, source_filename: str = "",
+                    mode_hint: Optional[str] = None) -> str:
+    """从文件名 + 分析结果生成起始 caption。
+
+    起始 caption 会包含一个 `[...]` 占位符提醒用户填补流派/乐器/情绪
+    (这些纯靠音频自动分析不可靠,得人来标)。
+
+    mode_hint: 'vocal_only' / 'full_mix' / None。vocal_only 模式会在
+    caption 前加 "solo vocal" 提示这是人声音色训练用。
+    """
     parts = []
 
+    # 1. 人声训练提示
+    if mode_hint == "vocal_only":
+        parts.append("solo vocal")
+
+    # 2. 从文件名识别风格关键词
     name_lower = (source_filename or info.get("filename", "")).lower()
     matched_style = None
     for kw, tag in STYLE_KEYWORDS.items():
@@ -107,10 +120,25 @@ def suggest_caption(info: dict, source_filename: str = "") -> str:
     if matched_style:
         parts.append(matched_style)
 
-    if info.get("bpm"):
-        parts.append(f"{info['bpm']} bpm")
+    # 3. 速度档位 + 精确 BPM
+    bpm = info.get("bpm")
+    if bpm:
+        if bpm < 70:
+            parts.append("slow")
+        elif bpm < 100:
+            parts.append("mid-tempo")
+        elif bpm < 130:
+            parts.append("upbeat")
+        else:
+            parts.append("fast")
+        parts.append(f"{int(bpm)} bpm")
+
+    # 4. 调
     if info.get("key"):
         parts.append(f"key of {info['key']}")
+
+    # 5. 占位符提醒用户填
+    parts.append("[填: 流派/乐器/情绪/语言]")
 
     return ", ".join(parts)
 
@@ -121,6 +149,7 @@ def prepare_dataset(
     target_sr: int = 44100,
     target_format: str = "wav",
     target_channels: int = 2,
+    mode_hint: Optional[str] = None,
 ) -> dict:
     """准备 LoRA 训练数据集。
 
@@ -128,8 +157,11 @@ def prepare_dataset(
     1. 扫描 source_dir 里的音频
     2. 重采样 + 转格式输出到 output_dir/audio/
     3. 用 librosa 分析每首的 BPM/key
-    4. 生成 caption 建议
+    4. 生成 caption 建议(含 placeholder)
     5. 写 metadata.csv
+
+    mode_hint: 'vocal_only' / 'full_mix' (透传给 suggest_caption,
+    vocal_only 时 caption 前加 'solo vocal')
     """
     if not shutil.which("ffmpeg"):
         return {"error": "ffmpeg 未安装"}
@@ -181,7 +213,7 @@ def prepare_dataset(
         info = analyze_audio(dst)
         info["source_filename"] = src.name
         info["dataset_filename"] = dst.name
-        info["suggested_caption"] = suggest_caption(info, src.name)
+        info["suggested_caption"] = suggest_caption(info, src.name, mode_hint=mode_hint)
         info["caption"] = info["suggested_caption"]  # 默认用建议,UI 里可改
 
         report["tracks"].append(info)

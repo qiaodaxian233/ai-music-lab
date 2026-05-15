@@ -33,6 +33,7 @@ from lib import (
     export_bundle,
     history,
     lora_manager,
+    lora_dataset_builder,
     lora_merge,
     lrc_export,
     pinyin_tools,
@@ -241,17 +242,101 @@ def l_save_captions(project_name: str, table_data):
     csv_path = DATASETS_DIR / project_name / "metadata.csv"
     if not csv_path.exists():
         return f"❌ 还没生成 metadata.csv,先点'分析'"
-    if not table_data:
+
+    # Gradio 4 = list of lists, Gradio 5/6 = pandas DataFrame
+    rows_list = []
+    if table_data is None:
         return "⚠ 表格为空"
+    if hasattr(table_data, "values") and hasattr(table_data, "columns"):
+        # pandas DataFrame
+        try:
+            rows_list = table_data.values.tolist()
+        except Exception as e:
+            return f"❌ DataFrame 解析失败: {e}"
+    elif isinstance(table_data, list):
+        rows_list = table_data
+    else:
+        return f"❌ 表格数据类型未知: {type(table_data).__name__}"
+
+    if not rows_list:
+        return "⚠ 表格为空"
+
     captions = {}
-    for row in table_data:
-        if len(row) >= 5:
-            fname = (row[0] or "").strip()
-            caption = (row[4] or "").strip()
-            if fname:
-                captions[fname] = caption
-    updated = training_data.update_captions(csv_path, captions)
-    return f"✓ 已保存 {updated} 条 caption 到 {csv_path}"
+    for row in rows_list:
+        try:
+            row = list(row)  # 防 tuple / pd Series
+            if len(row) >= 5:
+                fname = str(row[0] or "").strip()
+                caption = str(row[4] or "").strip()
+                if fname and fname.lower() not in ("nan", "none"):
+                    captions[fname] = caption
+        except Exception:
+            continue
+
+    if not captions:
+        return "⚠ 没有效行 (文件名列空)"
+
+    try:
+        updated = training_data.update_captions(csv_path, captions)
+    except Exception as e:
+        return f"❌ 写 CSV 失败: {e}"
+    return f"✓ 已保存 {updated}/{len(captions)} 条 caption 到 {csv_path}"
+
+
+def l_quick_import(files, dataset_name, mode, target_sr, target_channels,
+                   progress=gr.Progress()):
+    """一键: 拖音频 → (可选) Demucs 拆 vocals → prepare_dataset"""
+    if not files:
+        return "⚠ 先拖音频文件进来", None, gr.update()
+
+    # gr.File(file_count='multiple', type='filepath') 返字符串路径列表
+    paths = []
+    for f in files:
+        if isinstance(f, str):
+            paths.append(f)
+        elif hasattr(f, "name"):
+            paths.append(f.name)
+        elif isinstance(f, dict) and "name" in f:
+            paths.append(f["name"])
+
+    def cb(i, total, msg):
+        progress(i / total if total else 0, desc=msg)
+
+    try:
+        r = lora_dataset_builder.quick_import(
+            paths, dataset_name,
+            mode=mode,
+            target_sr=int(target_sr),
+            target_channels=int(target_channels),
+            progress_callback=cb,
+        )
+    except Exception as e:
+        return f"❌ {e}", None, gr.update()
+
+    lines = []
+    if r["ok"]:
+        lines.append(f"✓ 完成: {r['imported']}/{r['total']} 首入库")
+        lines.append(f"  数据集目录: {r['dataset_dir']}")
+        lines.append(f"  模式: {r['mode_used']}")
+        prep = r.get("prepare_result") or {}
+        if prep:
+            lines.append(f"  prepare: 处理 {prep.get('succeeded', '?')}/{prep.get('total', '?')} 首")
+            lines.append(f"  metadata.csv: {r['dataset_dir']}/metadata.csv")
+        lines.append("")
+        lines.append("→ 接着在下面「现有项目」里选这个项目,编辑 caption,然后去 ACE-Step UI 训")
+    else:
+        lines.append(f"❌ 全部失败")
+    if r.get("errors"):
+        lines.append(f"⚠ {len(r['errors'])} 个错误:")
+        for e in r["errors"][:6]:
+            lines.append(f"  {e}")
+        if len(r["errors"]) > 6:
+            lines.append(f"  ...还有 {len(r['errors']) - 6} 个,看 stderr")
+
+    # 刷新项目下拉
+    new_choices = _list_lora_projects()
+    return ("\n".join(lines), None,
+            gr.update(choices=new_choices, value=dataset_name))
 
 
 # ───────────────────────────────────────────────
@@ -1254,9 +1339,43 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
         # ─── Tab 2: LoRA wizard ───
         with gr.TabItem("🎓 LoRA 训练数据"):
             gr.Markdown("""
-**工作流**: 建项目 → 把参考歌(5-20 首)放到 `datasets/<项目名>/raw/` →
-点分析 → 编辑 caption → 保存 → 去 ACE-Step UI 训练。
+**工作流(推荐 — 一键)**: 拖音频 → 选模式(拆人声 / 整曲)→ 自动建数据集 → 编辑 caption → 去 ACE-Step UI 训。
+**手动模式**: 把音频放到 `datasets/<项目>/raw/` → 点"分析并准备"。
 """)
+
+            # ─── 一键导入区 (v0.5.6) ───
+            with gr.Accordion("🚀 一键导入 — 拖音频自动建训练集", open=True):
+                gr.Markdown("""
+拖一批音频(任意来源:Suno / 你自己唱的 / 朋友给的 wav / Spotify 下来的 mp3),输入数据集名,选模式,点 🚀。
+**纯人声**模式会先用 Demucs 拆出 vocals.wav 再入库(训音色推荐,需 ~5GB Demucs 模型,首次慢)。
+**完整混合**模式不拆,适合训整曲风格 / 编曲。
+""")
+                l_qi_files = gr.File(
+                    label="拖音频(可多选)",
+                    file_count="multiple",
+                    file_types=["audio"],
+                    type="filepath",
+                )
+                with gr.Row():
+                    l_qi_name = gr.Textbox(
+                        label="数据集名 (新建或追加到已有)",
+                        placeholder="例: my-voice / wife-singing / suno-collection",
+                        scale=2,
+                    )
+                    l_qi_mode = gr.Radio(
+                        choices=[("纯人声 (Demucs 拆)", "vocal_only"),
+                                 ("完整混合 (不拆)", "full_mix")],
+                        label="模式",
+                        value="vocal_only",
+                        scale=2,
+                    )
+                l_qi_btn = gr.Button("🚀 一键处理(拆 / 复制 / 分析)",
+                                     variant="primary", size="lg")
+                l_qi_status = gr.Textbox(label="进度 / 结果",
+                                         interactive=False, lines=8)
+
+            gr.Markdown("---")
+            gr.Markdown("### 现有项目(手动管理 / 编辑 caption)")
             with gr.Row():
                 with gr.Column(scale=2):
                     l_dropdown = gr.Dropdown(label="选择项目",
@@ -1285,6 +1404,11 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
             l_save_btn = gr.Button("💾 保存 captions 到 metadata.csv", variant="primary")
             l_save_status = gr.Textbox(label="保存结果", interactive=False)
 
+            l_qi_btn.click(
+                l_quick_import,
+                [l_qi_files, l_qi_name, l_qi_mode, l_sr, l_ch],
+                [l_qi_status, l_qi_files, l_dropdown],
+            )
             l_create_btn.click(l_create_project, [l_new_box], [l_status, l_dropdown])
             l_analyze_btn.click(l_analyze, [l_dropdown, l_sr, l_ch], [l_status, l_table])
             l_save_btn.click(l_save_captions, [l_dropdown, l_table], [l_save_status])
