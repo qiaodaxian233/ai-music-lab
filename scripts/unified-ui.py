@@ -1173,8 +1173,8 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
                         headers=["⭐", "评分", "文件名", "时长", "Prompt", "Tags", "时间", "id"],
                         datatype=["str"] * 8,
                         interactive=False,
-                        row_count=(20, "dynamic"),
-                        col_count=(8, "fixed"),
+                        row_count=20,
+                        column_count=(8, "fixed"),
                         wrap=True,
                     )
 
@@ -1252,8 +1252,8 @@ with gr.Blocks(title="AI Music Lab 控制台") as app:
                 headers=["filename", "BPM", "key", "duration", "caption ← 编辑这列"],
                 datatype=["str"] * 5,
                 interactive=True,
-                row_count=(10, "dynamic"),
-                col_count=(5, "fixed"),
+                row_count=10,
+                column_count=(5, "fixed"),
                 wrap=True,
             )
             l_save_btn = gr.Button("💾 保存 captions 到 metadata.csv", variant="primary")
@@ -1430,8 +1430,8 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
                         headers=["名称", "格式", "大小", "配置", "描述", "tags"],
                         datatype=["str"] * 6,
                         interactive=False,
-                        row_count=(8, "dynamic"),
-                        col_count=(6, "fixed"),
+                        row_count=8,
+                        column_count=(6, "fixed"),
                         wrap=True,
                     )
                     lm_refresh_btn = gr.Button("🔄 重新扫描 loras/", size="sm")
@@ -1542,8 +1542,8 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
                         headers=["#", "prompt", "lyrics", "时长", "seed", "lora", "filename"],
                         datatype=["number"] + ["str"] * 6,
                         interactive=False,
-                        row_count=(8, "dynamic"),
-                        col_count=(7, "fixed"),
+                        row_count=8,
+                        column_count=(7, "fixed"),
                         wrap=True,
                     )
                     with gr.Row():
@@ -1561,8 +1561,8 @@ ACE-Step 对**拼音**识别率比汉字高很多(模型在英文+拼音上训�
                 headers=["#", "状态", "输出", "错误(首行)"],
                 datatype=["number", "str", "str", "str"],
                 interactive=False,
-                row_count=(10, "dynamic"),
-                col_count=(4, "fixed"),
+                row_count=10,
+                column_count=(4, "fixed"),
                 wrap=True,
             )
 

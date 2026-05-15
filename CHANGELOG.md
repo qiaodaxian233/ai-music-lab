@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## v0.5.4 — Gradio 6.0 兼容 hotfix (2026-05-15)
+
+用户在 Win 上跑 v0.5.3 总控台,撞了 Gradio 6.0 + .bat 编码两个坑,一并修。
+
+### 🐛 修复
+
+| 问题 | 原因 | 修复 |
+|---|---|---|
+| `start-manager.bat` 报 `'动地址:' is not recognized` | .bat 含中文 echo,UTF-8 无 BOM,cmd 在 `chcp 65001` 生效前解码错位 | 改成纯 ASCII echo (英文) |
+| `Blocks.launch() got an unexpected keyword argument 'show_api'` | Gradio 6.0 移除 `show_api` 参数 | 删除 |
+| `theme` 警告: Gradio 6.0 把 theme 从 Blocks 移到 launch() | API 重组 | 改用 `app.launch(theme=...)` |
+| `col_count` deprecation | Gradio 6.0 → `column_count` | 全部改名 (lab-manager.py + unified-ui.py 共 6 处) |
+| `row_count=(N, "fixed")` deprecation | Gradio 6.0 → `row_count=N, row_limits=(N,N)` | 同上 (6 处) |
+
+### 📁 文件改动
+
+- 修改: `start-manager.bat`(改 ASCII echo,避免中文乱码)
+- 修改: `scripts/lab-manager.py`(launch 参数 + col_count/row_count 重命名)
+- 修改: `scripts/unified-ui.py`(col_count/row_count 重命名 5 处)
+- 修改: `CHANGELOG.md` / `项目对接记忆.md`
+
+### ⚠ 用户先决条件提醒
+
+- `pip install psutil`(总控台必装,未装会退化但不挂)
+- 或者跑 `pip install -r requirements.txt` 一次性装齐 v0.5.0~v0.5.3 所有新依赖
+
+### 沙箱实测
+
+- Gradio 6.14.0 + Python 3.12 跑通,**两个 UI 装配 + 真 launch 都 OK,零 deprecation**
+
+---
+
 ## v0.5.3 — 总控台 (端口 7862,启停 + 监控 3 个服务) (2026-05-15)
 
 补一个**更高一层的总控**:启停 + 监控 ACE-Step 主 UI / 统一控制台 / 后处理 watcher 三个常驻服务,看 GPU/磁盘状态,看最近输出,看实时日志。

@@ -169,7 +169,7 @@ def act_clear_log(key):
 # UI
 # ───────────────────────────────────────────────
 
-with gr.Blocks(title="AI Music Lab — 总控台 :7862", theme=gr.themes.Soft()) as app:
+with gr.Blocks(title="AI Music Lab — 总控台 :7862") as app:
     gr.Markdown("""
 # 🎛 AI Music Lab — 总控台
 
@@ -234,8 +234,8 @@ with gr.Blocks(title="AI Music Lab — 总控台 :7862", theme=gr.themes.Soft())
         headers=["路径", "大小", "何时"],
         datatype=["str", "str", "str"],
         interactive=False,
-        row_count=(10, "fixed"),
-        col_count=(3, "fixed"),
+        row_count=10, row_limits=(10, 10),
+        column_count=(3, "fixed"),
         wrap=True,
     )
 
@@ -329,5 +329,16 @@ if __name__ == "__main__":
     print("    7861       统一控制台 (12 Tab 功能)")
     print("  本管理器只负责启停 + 监控这两个 + watcher")
     print("=" * 60)
-    app.launch(server_name="127.0.0.1", server_port=7862,
-               inbrowser=True, show_api=False, quiet=False)
+    # launch 参数兼容 Gradio 5.x 和 6.x
+    launch_kwargs = dict(
+        server_name="127.0.0.1",
+        server_port=7862,
+        inbrowser=True,
+        quiet=False,
+    )
+    # Gradio 6.0 把 theme 挪到 launch();老版接受但忽略
+    try:
+        launch_kwargs["theme"] = gr.themes.Soft()
+    except Exception:
+        pass
+    app.launch(**launch_kwargs)

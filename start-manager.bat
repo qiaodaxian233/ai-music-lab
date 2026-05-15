@@ -1,23 +1,23 @@
 @echo off
 chcp 65001 >nul
-title AI Music Lab - 总控台 (端口 7862)
+title AI Music Lab - Manager (port 7862)
 echo.
 echo ========================================
-echo   AI Music Lab - 总控台
+echo   AI Music Lab - Manager
 echo ========================================
 echo.
-echo 启停 / 监控 3 个服务 + 系统状态
-echo 启动地址: http://localhost:7862
-echo 关闭窗口即停止总控台 (各服务还会继续跑)
+echo Start / stop / monitor 3 services
+echo URL: http://localhost:7862
+echo Close this window to stop the manager (the services keep running)
 echo.
 
 if not exist ".venv\Scripts\activate.bat" (
-    echo [错误] 找不到 .venv
+    echo [ERROR] .venv not found
     echo.
-    echo 这个工具需要 ai-music-lab 的 venv. 修复办法:
-    echo   1. 删了重建: rmdir /s /q .venv  然后 python -m venv .venv
-    echo   2. 激活: .venv\Scripts\activate.bat
-    echo   3. 装依赖: pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+    echo This tool needs ai-music-lab's venv. Fix:
+    echo   1. Recreate:  rmdir /s /q .venv  then  python -m venv .venv
+    echo   2. Activate:  .venv\Scripts\activate.bat
+    echo   3. Install:   pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
     echo.
     pause
     exit /b 1
@@ -27,7 +27,7 @@ call .venv\Scripts\activate.bat
 
 python -c "import gradio" 2>nul
 if errorlevel 1 (
-    echo [错误] gradio 未装. 先跑:
+    echo [ERROR] gradio not installed. Run:
     echo   pip install -r requirements.txt
     echo.
     pause
@@ -36,7 +36,7 @@ if errorlevel 1 (
 
 python -c "import psutil" 2>nul
 if errorlevel 1 (
-    echo [警告] psutil 未装,进程管理会用退化模式 (不稳)
+    echo [WARN] psutil not installed, falling back to degraded process mgmt
     echo   pip install psutil
     echo.
 )
